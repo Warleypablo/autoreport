@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Logs - Auto Report{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-bold text-gray-800">Logs do Sistema</h1>
+    <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 text-sm text-gray-600">
+            <input type="checkbox" id="auto-refresh" class="rounded">
+            Auto-refresh
+        </label>
+        <button onclick="loadLogs()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition">
+            &#8635; Atualizar
+        </button>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+    <div class="flex flex-wrap items-center gap-4">
+        <div>
+            <label class="text-sm font-medium text-gray-700">Cliente:</label>
+            <input type="text" id="log-client-filter" placeholder="Filtrar por cliente..."
+                   class="ml-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none w-48">
+        </div>
+        <div>
+            <label class="text-sm font-medium text-gray-700">Nivel:</label>
+            <select id="log-level-filter" class="ml-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                <option value="">Todos</option>
+                <option value="ERROR">ERROR</option>
+                <option value="WARNING">WARNING</option>
+                <option value="INFO">INFO</option>
+            </select>
+        </div>
+        <div>
+            <label class="text-sm font-medium text-gray-700">Linhas:</label>
+            <select id="log-lines" class="ml-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                <option value="100">100</option>
+                <option value="200" selected>200</option>
+                <option value="500">500</option>
+            </select>
+        </div>
+        <button onclick="loadLogs()" class="px-4 py-1.5 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition">
+            Filtrar
+        </button>
+    </div>
+</div>
+
+<!-- Log output -->
+<div class="bg-gray-900 rounded-xl shadow-sm p-4 overflow-auto max-h-[70vh]">
+    <pre id="log-output" class="text-xs text-green-400 font-mono whitespace-pre-wrap leading-relaxed">Carregando logs...</pre>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', loadLogs);
+
+    let autoRefreshInterval = null;
+    document.getElementById('auto-refresh').addEventListener('change', (e) => {
+        if (e.target.checked) {
+            autoRefreshInterval = setInterval(loadLogs, 5000);
+        } else {
+            clearInterval(autoRefreshInterval);
+        }
+    });
+</script>
+{% endblock %}

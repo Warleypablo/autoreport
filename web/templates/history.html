@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Historico - Auto Report{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-bold text-gray-800">Historico de Geracoes</h1>
+    <button onclick="loadHistory()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition">
+        &#8635; Atualizar
+    </button>
+</div>
+
+<div id="history-loading" class="text-center py-12">
+    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+    <p class="text-gray-500 mt-3">Carregando historico...</p>
+</div>
+
+<div id="history-empty" class="hidden text-center py-12">
+    <p class="text-gray-500">Nenhuma geracao registrada ainda.</p>
+</div>
+
+<div id="history-container" class="hidden space-y-4">
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', loadHistory);
+</script>
+{% endblock %}

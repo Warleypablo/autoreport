@@ -1,0 +1,131 @@
+/* Auto Report - Custom styles */
+
+/* Navigation links */
+.nav-link {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    border-radius: 0.5rem;
+    transition: all 0.15s;
+}
+.nav-link:hover {
+    color: #1d4ed8;
+    background-color: #eff6ff;
+}
+.nav-link.active {
+    color: #1d4ed8;
+    background-color: #dbeafe;
+}
+
+/* Status badges */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.status-gerado {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+.status-processando {
+    background-color: #dbeafe;
+    color: #1e40af;
+    animation: pulse-bg 2s ease-in-out infinite;
+}
+.status-erro {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+.status-pendente {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+.status-ignorado {
+    background-color: #f9fafb;
+    color: #9ca3af;
+}
+.status-sucesso {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+@keyframes pulse-bg {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Flash messages */
+.flash-error {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+.flash-success {
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+.flash-info {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+/* Toast notifications */
+.toast {
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    animation: toast-in 0.3s ease-out;
+    max-width: 24rem;
+}
+.toast-success {
+    background-color: #065f46;
+    color: white;
+}
+.toast-error {
+    background-color: #991b1b;
+    color: white;
+}
+.toast-info {
+    background-color: #1e40af;
+    color: white;
+}
+
+@keyframes toast-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* Table row hover */
+#clients-tbody tr {
+    transition: background-color 0.15s;
+}
+#clients-tbody tr:hover {
+    background-color: #f9fafb;
+}
+
+/* Job panel transition */
+.status-update-flash {
+    animation: row-flash 0.5s ease-out;
+}
+@keyframes row-flash {
+    0% { background-color: #dbeafe; }
+    100% { background-color: transparent; }
+}
+
+/* History expandable */
+.history-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+.history-details.open {
+    max-height: 500px;
+}

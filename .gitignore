@@ -1,0 +1,30 @@
+# Credenciais locais
+.env
+.env.*
+credentials/
+*.json
+!channel_descriptions.json
+google-ads.yaml
+
+# Configurações sensíveis do projeto
+config/settings_puro.py
+!config/settings_example.py
+
+# Logs (opcional)
+logs/
+*.log
+
+# Arquivos do Python
+__pycache__/
+*.pyc
+
+# Web interface
+instance/
+*.db
+
+# Claude Code local config
+.claude/
+
+# Outros arquivos temporários
+.DS_Store
+Thumbs.db
