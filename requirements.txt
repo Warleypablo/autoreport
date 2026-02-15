@@ -39,3 +39,4 @@ google-ads>=27.0.0
 PyYAML>=6.0
 facebook-business>=16.0.0
 google-analytics-data>=0.18.19
+gunicorn>=22.0.0
