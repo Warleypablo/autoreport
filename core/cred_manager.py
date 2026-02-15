@@ -21,11 +21,14 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import google.auth
 
+import json as _json
+import os
+import tempfile
+
 from config import settings
 from utils.logger import get_logger
 
 import yaml # type: ignore
-import os
 from google.ads.googleads.client import GoogleAdsClient # type: ignore
 # Caminho padrão (fallback legacy)
 _YAML_PATH = Path(__file__).resolve().parent.parent / "credentials" / "google-ads.yaml"
@@ -38,6 +41,21 @@ log = get_logger(__name__)
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers internos
 # ──────────────────────────────────────────────────────────────────────────────
+def _sa_from_env(scopes: List[str]) -> Optional[Credentials]:
+    """Load Service Account from GOOGLE_SERVICE_ACCOUNT_JSON env var (JSON string)."""
+    raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if not raw:
+        return None
+    try:
+        info = _json.loads(raw)
+        creds = service_account.Credentials.from_service_account_info(info, scopes=scopes)
+        log.info("Usando Service Account do env GOOGLE_SERVICE_ACCOUNT_JSON")
+        return creds
+    except Exception as exc:
+        log.warning("Falha ao carregar GOOGLE_SERVICE_ACCOUNT_JSON: %s", exc)
+    return None
+
+
 def _sa_if_exists(json_path: Path, scopes: List[str]) -> Optional[Credentials]:
     if json_path.is_file():
         try:
@@ -90,13 +108,18 @@ def load_oauth() -> Credentials:
     """Credencial para Sheets / Slides / Drive (escopos múltiplos)."""
     scopes = settings.SCOPES
 
+    # 0) Service Account via env var (cloud deploy)
+    creds = _sa_from_env(scopes)
+    if creds:
+        return creds
+
     # 1) Service Account global (se houver)
     sa_path = Path(getattr(settings, "SERVICE_ACCOUNT_FILE", ""))
     creds = _sa_if_exists(sa_path, scopes)
     if creds:
         return creds
 
-    # 2) OAuth “Desktop App” global
+    # 2) OAuth "Desktop App" global
     client = Path(getattr(settings, "OAUTH_CLIENT_FILE", ""))
     token  = Path(getattr(settings, "TOKEN_FILE", "credentials/token.json"))
     creds = _oauth_if_exists(client, token, scopes)
@@ -110,6 +133,11 @@ def load_oauth() -> Credentials:
 def load_google_account() -> Credentials:
     """Credencial *exclusiva* para a Analytics Data API."""
     scopes = settings.SCOPE_GOOGLE_ACCOUNT
+
+    # 0) Service Account via env var (cloud deploy)
+    creds = _sa_from_env(scopes)
+    if creds:
+        return creds
 
     # 1) Service Account dedicada (caso não queira OAuth)
     sa_path = Path(getattr(settings, "GOOGLE_SERVICE_ACCOUNT_FILE", ""))
