@@ -11,8 +11,11 @@ from utils.logger import get_logger
 
 log = get_logger(__name__)
 
-# Mapping from dados dict keys to DB columns
-_METRICS_MAP = {
+# Mapping from dados dict keys to DB columns.
+# E-commerce keys are listed first; Lead-category keys map to the same
+# columns so the dashboard works for all categories (leads → vendas,
+# CPL → CPA, etc.).  First-match wins when both exist.
+_METRICS_MAP_ECOMMERCE = {
     "{{fat_sem}}": "faturamento",
     "{{inv_sem}}": "investimento",
     "{{roas}}": "roas",
@@ -28,6 +31,20 @@ _METRICS_MAP = {
     "{{roas_face}}": "roas_meta",
     "{{cpa_goog}}": "cpa_google",
     "{{cpa_face}}": "cpa_meta",
+    "{{ses_ga}}": "sessoes",
+}
+
+# Lead categories: leads → vendas, CPL → CPA (same DB columns)
+_METRICS_MAP_LEAD = {
+    "{{inv_sem}}": "investimento",
+    "{{lead_sem}}": "vendas",
+    "{{cpl}}": "cpa",
+    "{{inv_goog}}": "inv_google",
+    "{{lead_goog}}": "vendas_google",
+    "{{cpl_goog}}": "cpa_google",
+    "{{inv_face}}": "inv_meta",
+    "{{lead_face}}": "vendas_meta",
+    "{{cpl_face}}": "cpa_meta",
     "{{ses_ga}}": "sessoes",
 }
 
@@ -59,10 +76,20 @@ def save_metrics_snapshot(cliente, dados: Dict[str, str], periodo, freq: str):
     """
     from web.pg_db import get_standalone_conn
 
+    # Pick the right mapping based on category
+    cat = (cliente.categoria or "").strip().lower()
+    if cat.startswith("lead"):
+        metrics_map = _METRICS_MAP_LEAD
+    else:
+        metrics_map = _METRICS_MAP_ECOMMERCE
+
     # Parse metrics
     metrics = {}
-    for dados_key, col_name in _METRICS_MAP.items():
-        metrics[col_name] = _parse_metric(dados, dados_key, col_name)
+    for dados_key, col_name in metrics_map.items():
+        val = _parse_metric(dados, dados_key, col_name)
+        # Only set if not already set (first-match wins)
+        if col_name not in metrics or metrics[col_name] is None:
+            metrics[col_name] = val
 
     # Build dados_raw: parse all values to float where possible
     dados_raw = {}
