@@ -478,6 +478,8 @@ def get_logs():
 @login_required
 def list_gestores():
     """Return distinct gestor names from PG; fall back to Sheets if empty."""
+    from web.sync import _normalize_name
+
     try:
         conn = get_pg_conn()
         cur = conn.cursor()
@@ -486,11 +488,17 @@ def list_gestores():
             WHERE gestor IS NOT NULL AND gestor != ''
             ORDER BY gestor
         """)
-        gestores = [row[0] for row in cur.fetchall()]
+        raw = [row[0] for row in cur.fetchall()]
         cur.close()
 
-        if gestores:
-            return jsonify(gestores)
+        if raw:
+            # Deduplicate after normalizing (DB may have old inconsistent data)
+            seen = {}
+            for g in raw:
+                norm = _normalize_name(g) or g
+                if norm not in seen:
+                    seen[norm] = norm
+            return jsonify(sorted(seen.values()))
     except Exception:
         pass
 
@@ -505,10 +513,10 @@ def list_gestores():
             tab_name=settings.CENTRAL_TAB_NAME,
         )
         gestor_set = sorted({
-            c.extras.get("GESTOR", "")
+            _normalize_name(c.extras.get("GESTOR", "")) or ""
             for c in clientes
             if c.extras.get("GESTOR")
-        })
+        } - {""})
         _trigger_background_sync()
         return jsonify(gestor_set)
     except Exception as exc:
@@ -522,6 +530,7 @@ def gestor_dashboard(nome: str):
     conn = get_pg_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
+    # Case-insensitive match to handle inconsistent gestor names in DB
     # Per-client latest metrics
     cur.execute("""
         SELECT DISTINCT ON (m.cliente_nome)
@@ -532,7 +541,7 @@ def gestor_dashboard(nome: str):
             m.periodo_inicio, m.periodo_fim, m.created_at
         FROM metricas m
         JOIN clientes c ON c.nome = m.cliente_nome
-        WHERE c.gestor = %s
+        WHERE LOWER(c.gestor) = LOWER(%s)
         ORDER BY m.cliente_nome, m.created_at DESC
     """, (nome,))
     clients_with_metrics = [dict(r) for r in cur.fetchall()]
@@ -541,11 +550,11 @@ def gestor_dashboard(nome: str):
     cur.execute("""
         SELECT c.nome as cliente_nome, c.categoria, c.status_auto, c.ultima_geracao
         FROM clientes c
-        WHERE c.gestor = %s
+        WHERE LOWER(c.gestor) = LOWER(%s)
           AND c.nome NOT IN (
               SELECT DISTINCT m.cliente_nome FROM metricas m
               JOIN clientes c2 ON c2.nome = m.cliente_nome
-              WHERE c2.gestor = %s
+              WHERE LOWER(c2.gestor) = LOWER(%s)
           )
         ORDER BY c.nome
     """, (nome, nome))
@@ -563,7 +572,7 @@ def gestor_dashboard(nome: str):
     }
 
     # Count all clients for this gestor
-    cur.execute("SELECT COUNT(*) FROM clientes WHERE gestor = %s", (nome,))
+    cur.execute("SELECT COUNT(*) FROM clientes WHERE LOWER(gestor) = LOWER(%s)", (nome,))
     summary["total_clientes"] = cur.fetchone()["count"]
 
     for c in clients_with_metrics:

@@ -124,7 +124,7 @@ def collect_metrics_for_gestor(
     try:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(
-            "SELECT * FROM clientes WHERE gestor = %s ORDER BY nome",
+            "SELECT * FROM clientes WHERE LOWER(gestor) = LOWER(%s) ORDER BY nome",
             (gestor_name,),
         )
         rows = [dict(r) for r in cur.fetchall()]
