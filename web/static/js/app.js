@@ -16,6 +16,22 @@ function toggleTheme() {
 }
 
 // ─────────────────────────────────────────────
+// Client sync to DB
+// ─────────────────────────────────────────────
+async function syncClientsToDb() {
+    try {
+        showToast('Sincronizando clientes...', 'info');
+        const resp = await fetch('/api/sync-clients', { method: 'POST' });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        showToast(`${data.synced} clientes sincronizados`, 'success');
+        loadClients();
+    } catch (err) {
+        showToast('Erro ao sincronizar: ' + err.message, 'error');
+    }
+}
+
+// ─────────────────────────────────────────────
 // SSE (Server-Sent Events)
 // ─────────────────────────────────────────────
 function initSSE() {

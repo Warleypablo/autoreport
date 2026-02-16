@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Gestores - Auto Report{% endblock %}
+
+{% block content %}
+<!-- Gestor selector bar -->
+<div class="card p-4 mb-6">
+    <div class="flex flex-wrap items-center gap-4">
+        <div class="flex items-center gap-2">
+            <label class="text-sm font-medium text-surface-400">Gestor:</label>
+            <select id="gestor-select" class="select-field w-56" onchange="loadGestorDashboard()">
+                <option value="">Selecione um gestor...</option>
+            </select>
+        </div>
+        <button onclick="syncClientsFromGestor()" class="btn-secondary" title="Sincronizar clientes da planilha">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+            Sincronizar
+        </button>
+    </div>
+</div>
+
+<!-- Loading -->
+<div id="gestor-loading" class="hidden text-center py-16">
+    <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary-600 border-t-transparent"></div>
+    <p class="text-surface-400 mt-3 text-sm">Carregando dados do gestor...</p>
+</div>
+
+<!-- Empty state -->
+<div id="gestor-empty" class="text-center py-16">
+    <div class="w-12 h-12 bg-surface-200 dark:bg-surface-800 rounded-full flex items-center justify-center mx-auto mb-3">
+        <svg class="w-6 h-6 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+    </div>
+    <p class="text-surface-400">Selecione um gestor para ver as metricas.</p>
+    <p class="text-surface-400 text-xs mt-1">Se nao ha gestores, clique em "Sincronizar" primeiro.</p>
+</div>
+
+<!-- Summary cards -->
+<div id="gestor-summary" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="card p-4">
+        <p class="text-xs text-surface-400 uppercase tracking-wider">Clientes</p>
+        <p id="sum-clientes" class="text-2xl font-bold text-surface-700 dark:text-surface-200 mt-1">-</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-surface-400 uppercase tracking-wider">Faturamento</p>
+        <p id="sum-faturamento" class="text-2xl font-bold text-emerald-500 mt-1">-</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-surface-400 uppercase tracking-wider">Investimento</p>
+        <p id="sum-investimento" class="text-2xl font-bold text-surface-700 dark:text-surface-200 mt-1">-</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-surface-400 uppercase tracking-wider">ROAS Medio</p>
+        <p id="sum-roas" class="text-2xl font-bold text-primary-500 mt-1">-</p>
+    </div>
+</div>
+
+<!-- Platform breakdown -->
+<div id="gestor-platforms" class="hidden grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="card p-4">
+        <p class="text-xs text-surface-400 uppercase tracking-wider">Vendas Total</p>
+        <p id="sum-vendas" class="text-xl font-bold text-surface-700 dark:text-surface-200 mt-1">-</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-surface-400 uppercase tracking-wider">Investimento Google</p>
+        <p id="sum-inv-google" class="text-xl font-bold text-surface-700 dark:text-surface-200 mt-1">-</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-surface-400 uppercase tracking-wider">Investimento Meta</p>
+        <p id="sum-inv-meta" class="text-xl font-bold text-surface-700 dark:text-surface-200 mt-1">-</p>
+    </div>
+    <div class="card p-4">
+        <p class="text-xs text-surface-400 uppercase tracking-wider">&nbsp;</p>
+        <p class="text-xl font-bold text-surface-300 mt-1">&nbsp;</p>
+    </div>
+</div>
+
+<!-- Per-client breakdown table -->
+<div id="gestor-clients" class="hidden">
+    <h3 class="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-3">Detalhamento por Cliente</h3>
+    <div class="card overflow-hidden">
+        <table class="w-full">
+            <thead>
+                <tr class="bg-surface-50 dark:bg-surface-800/50 border-b border-surface-200 dark:border-surface-700/50">
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-surface-400 uppercase">Cliente</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-surface-400 uppercase">Categoria</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-surface-400 uppercase">Faturamento</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-surface-400 uppercase">Investimento</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-surface-400 uppercase">ROAS</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-surface-400 uppercase">Vendas</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-surface-400 uppercase">CPA</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-surface-400 uppercase">Periodo</th>
+                </tr>
+            </thead>
+            <tbody id="gestor-clients-tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Clients without metrics -->
+<div id="gestor-no-metrics" class="hidden mt-4">
+    <h3 class="text-sm font-semibold text-surface-700 dark:text-surface-200 mb-3">Clientes sem metricas (ainda nao geraram relatorio)</h3>
+    <div id="gestor-no-metrics-list" class="flex flex-wrap gap-2"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/gestor.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', loadGestores);
+</script>
+{% endblock %}

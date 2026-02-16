@@ -149,7 +149,17 @@ WEB_PORT: int = _env("WEB_PORT", 5000, cast=int)
 WEB_HOST: str = _env("WEB_HOST", "0.0.0.0")
 
 # ─────────────────────────────────────────────
-# 8. Não edite abaixo, a menos que saiba o que está fazendo
+# 8. PostgreSQL
+# ─────────────────────────────────────────────
+PG_HOST: str = _env("PG_HOST", "127.0.0.1")
+PG_PORT: int = _env("PG_PORT", 5432, cast=int)
+PG_DBNAME: str = _env("PG_DBNAME", "dados_turbo")
+PG_USER: str = _env("PG_USER", "postgres")
+PG_PASSWORD: str = _env("PG_PASSWORD", "")
+PG_SCHEMA: str = _env("PG_SCHEMA", "autoreport")
+
+# ─────────────────────────────────────────────
+# 9. Não edite abaixo, a menos que saiba o que está fazendo
 # ─────────────────────────────────────────────
 __all__ = [
     # planilha central

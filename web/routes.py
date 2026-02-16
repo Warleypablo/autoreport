@@ -26,6 +26,12 @@ def client_detail(nome: str):
     return render_template("client_detail.html", client_name=nome)
 
 
+@main_bp.route("/gestor")
+@login_required
+def gestor_dashboard():
+    return render_template("gestor_dashboard.html")
+
+
 @main_bp.route("/history")
 @login_required
 def history():

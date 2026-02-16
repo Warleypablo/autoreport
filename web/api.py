@@ -4,13 +4,27 @@
 import json
 import queue
 import threading
+from decimal import Decimal
+from datetime import date, datetime
 from pathlib import Path
 
+import psycopg2.extras
 from flask import Blueprint, Response, jsonify, request, session
 
 from web.auth import login_required
+from web.pg_db import get_pg_conn
 
 api_bp = Blueprint("api", __name__)
+
+
+def _json_default(obj):
+    """Handle Decimal, date and datetime serialisation for jsonify."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, (date, datetime)):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
 
 # ---------------------------------------------------------------------------
 # SSE broadcast infrastructure
@@ -63,42 +77,36 @@ def status_stream():
 
 
 # ---------------------------------------------------------------------------
-# Client listing
+# Client listing (from PostgreSQL)
 # ---------------------------------------------------------------------------
 @api_bp.route("/clients")
 @login_required
 def list_clients():
-    """Return all clients from the central spreadsheet (read-only)."""
+    """Return all clients from PostgreSQL cache."""
     try:
-        from core.leitura_central import fetch_clientes
-        from config import settings
+        conn = get_pg_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT nome, categoria, gestor, squad, painel_url, pasta_url,
+                   id_google_ads, id_meta_ads, id_ga4,
+                   status_auto, ultima_geracao, extras, synced_at
+            FROM clientes ORDER BY nome
+        """)
+        rows = cur.fetchall()
+        cur.close()
 
-        clientes = fetch_clientes(
-            atualizar=False,
-            only=None,
-            sheet_url=settings.CENTRAL_SHEET_URL,
-            tab_name=settings.CENTRAL_TAB_NAME,
-        )
+        # Map field names for backward compatibility with existing JS
         result = []
-        for c in clientes:
-            # Collect extra columns (non-private, non-standard)
-            extra_cols = {
-                k: v for k, v in c.extras.items()
-                if not k.startswith("_") and k not in ("STATUS (AUTO)", "ULTIMA VEZ GERADO (AUTO)")
-            }
-            result.append({
-                "nome": c.nome,
-                "categoria": c.categoria,
-                "painel_url": c.painel_url,
-                "pasta_url": c.pasta_url,
-                "id_google_ads": c.id_google_ads,
-                "id_meta_ads": c.id_meta_ads,
-                "id_ga4": c.id_ga4,
-                "status": c.extras.get("STATUS (AUTO)", ""),
-                "ultima_geracao": c.extras.get("ULTIMA VEZ GERADO (AUTO)", ""),
-                "extras": extra_cols,
-                "_row": c.extras.get("_row"),
-            })
+        for r in rows:
+            d = dict(r)
+            d["status"] = d.pop("status_auto", "")
+            # Merge extras into the response (like GESTOR, SQUAD already as top-level)
+            extras = d.get("extras") or {}
+            if isinstance(extras, str):
+                extras = json.loads(extras)
+            d["extras"] = extras
+            result.append(d)
+
         return jsonify(result)
     except Exception as exc:
         import traceback
@@ -108,9 +116,25 @@ def list_clients():
 
 
 # ---------------------------------------------------------------------------
-# Client update
+# Client sync (Sheets -> PG)
 # ---------------------------------------------------------------------------
-# Map of editable field names to spreadsheet column headers
+@api_bp.route("/sync-clients", methods=["POST"])
+@login_required
+def sync_clients():
+    """Trigger client sync from Google Sheets to PostgreSQL."""
+    try:
+        from web.sync import sync_clientes_from_sheets
+        result = sync_clientes_from_sheets()
+        return jsonify(result)
+    except Exception as exc:
+        import traceback
+        print(f"[API /sync-clients ERROR] {traceback.format_exc()}")
+        return jsonify({"error": str(exc)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Client update (still writes to Sheets directly)
+# ---------------------------------------------------------------------------
 _FIELD_TO_COL = {
     "nome": "CLIENTE",
     "categoria": "CATEGORIA",
@@ -137,7 +161,6 @@ def update_client(nome: str):
         if not body:
             return jsonify({"error": "Corpo vazio"}), 400
 
-        # Fetch clients to find the target row and header_map
         clientes = fetch_clientes(
             atualizar=False, only=nome,
             sheet_url=settings.CENTRAL_SHEET_URL,
@@ -156,10 +179,8 @@ def update_client(nome: str):
 
         updated_fields = []
         for field_key, value in body.items():
-            # Check standard fields
             col_name = _FIELD_TO_COL.get(field_key)
             if not col_name:
-                # Check if it's a direct column name (for extras)
                 col_name = field_key.upper()
 
             col_idx = header_map.get(col_name)
@@ -247,13 +268,18 @@ def cancel_job(job_id: str):
 @api_bp.route("/history")
 @login_required
 def get_history():
-    """Return generation history from SQLite."""
+    """Return generation history from PostgreSQL."""
     from web.models import get_job_history
 
     page = request.args.get("page", 1, type=int)
     per_page = request.args.get("per_page", 20, type=int)
     rows = get_job_history(page=page, per_page=per_page)
-    return jsonify(rows)
+
+    # Serialize dates/decimals
+    return Response(
+        json.dumps(rows, default=_json_default, ensure_ascii=False),
+        mimetype="application/json",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +302,6 @@ def get_logs():
     with open(log_file, "r", encoding="utf-8", errors="replace") as f:
         all_lines = f.readlines()
 
-    # Filter from the end (most recent first)
     all_lines.reverse()
     result = []
     for line in all_lines:
@@ -289,3 +314,100 @@ def get_logs():
         result.append(line.rstrip())
 
     return jsonify(result)
+
+
+# ---------------------------------------------------------------------------
+# Gestores
+# ---------------------------------------------------------------------------
+@api_bp.route("/gestores")
+@login_required
+def list_gestores():
+    """Return distinct gestor names from PG."""
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT DISTINCT gestor FROM clientes
+        WHERE gestor IS NOT NULL AND gestor != ''
+        ORDER BY gestor
+    """)
+    gestores = [row[0] for row in cur.fetchall()]
+    cur.close()
+    return jsonify(gestores)
+
+
+@api_bp.route("/gestor/<path:nome>/dashboard")
+@login_required
+def gestor_dashboard(nome: str):
+    """Return aggregated metrics and per-client breakdown for a gestor."""
+    conn = get_pg_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # Per-client latest metrics
+    cur.execute("""
+        SELECT DISTINCT ON (m.cliente_nome)
+            m.cliente_nome, m.categoria, m.freq,
+            m.faturamento, m.investimento, m.roas, m.vendas, m.cpa,
+            m.inv_google, m.fat_google, m.inv_meta, m.fat_meta,
+            m.vendas_google, m.vendas_meta, m.sessoes,
+            m.periodo_inicio, m.periodo_fim, m.created_at
+        FROM metricas m
+        JOIN clientes c ON c.nome = m.cliente_nome
+        WHERE c.gestor = %s
+        ORDER BY m.cliente_nome, m.created_at DESC
+    """, (nome,))
+    clients_with_metrics = [dict(r) for r in cur.fetchall()]
+
+    # Clients without metrics yet
+    cur.execute("""
+        SELECT c.nome as cliente_nome, c.categoria, c.status_auto, c.ultima_geracao
+        FROM clientes c
+        WHERE c.gestor = %s
+          AND c.nome NOT IN (
+              SELECT DISTINCT m.cliente_nome FROM metricas m
+              JOIN clientes c2 ON c2.nome = m.cliente_nome
+              WHERE c2.gestor = %s
+          )
+        ORDER BY c.nome
+    """, (nome, nome))
+    clients_no_metrics = [dict(r) for r in cur.fetchall()]
+
+    # Summary aggregation
+    summary = {
+        "total_clientes": 0,
+        "total_faturamento": 0,
+        "total_investimento": 0,
+        "roas_medio": None,
+        "total_vendas": 0,
+        "total_inv_google": 0,
+        "total_inv_meta": 0,
+    }
+
+    # Count all clients for this gestor
+    cur.execute("SELECT COUNT(*) FROM clientes WHERE gestor = %s", (nome,))
+    summary["total_clientes"] = cur.fetchone()["count"]
+
+    for c in clients_with_metrics:
+        summary["total_faturamento"] += float(c.get("faturamento") or 0)
+        summary["total_investimento"] += float(c.get("investimento") or 0)
+        summary["total_vendas"] += int(c.get("vendas") or 0)
+        summary["total_inv_google"] += float(c.get("inv_google") or 0)
+        summary["total_inv_meta"] += float(c.get("inv_meta") or 0)
+
+    if summary["total_investimento"] > 0:
+        summary["roas_medio"] = round(
+            summary["total_faturamento"] / summary["total_investimento"], 2
+        )
+
+    cur.close()
+
+    result = {
+        "gestor": nome,
+        "summary": summary,
+        "clients": clients_with_metrics,
+        "clients_no_metrics": clients_no_metrics,
+    }
+
+    return Response(
+        json.dumps(result, default=_json_default, ensure_ascii=False),
+        mimetype="application/json",
+    )

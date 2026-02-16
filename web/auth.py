@@ -3,6 +3,7 @@
 
 from functools import wraps
 
+import psycopg2.extras
 from flask import (
     Blueprint,
     flash,
@@ -14,7 +15,7 @@ from flask import (
 )
 from werkzeug.security import check_password_hash
 
-from web.db import get_db
+from web.pg_db import get_pg_conn
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -33,10 +34,11 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        db = get_db()
-        user = db.execute(
-            "SELECT * FROM users WHERE username = ?", (username,)
-        ).fetchone()
+        conn = get_pg_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cur.fetchone()
+        cur.close()
         if user and check_password_hash(user["password_hash"], password):
             session.clear()
             session["user_id"] = user["id"]

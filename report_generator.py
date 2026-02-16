@@ -75,6 +75,13 @@ def processar_cliente(cliente, FREQ: str = "SEMANAL") -> None:
         dados.update(handler.coletar_dados(cliente, periodo_ref, periodo_comp)) # Dados Concentrados
         step_logger.end("coletar_dados_categoria")
 
+        # Salva metricas no PostgreSQL (nao-critico, falha silenciosa)
+        try:
+            from web.metrics_store import save_metrics_snapshot
+            save_metrics_snapshot(cliente, dados, periodo_ref, FREQ)
+        except Exception:
+            log.warning("Falha ao salvar metricas no PG", exc_info=True)
+
         step_logger.start("criar_copia_template")
         presentation_id = template_manager.criar_copia(cliente, periodo_ref, template_id=handler.template_id, FREQ=FREQ)
         cliente.extras["_presentation_id"] = presentation_id

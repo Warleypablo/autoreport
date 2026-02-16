@@ -6,7 +6,7 @@ from pathlib import Path
 
 from flask import Flask
 
-from web.db import init_db, close_db
+from web.pg_db import init_pg_db, close_pg_conn
 
 _BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -22,12 +22,11 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = os.getenv(
         "FLASK_SECRET_KEY", "change-me-in-production-please"
     )
-    app.config["DATABASE"] = os.path.join(app.instance_path, "auto_report.db")
 
     os.makedirs(app.instance_path, exist_ok=True)
 
-    init_db(app)
-    app.teardown_appcontext(close_db)
+    init_pg_db(app)
+    app.teardown_appcontext(close_pg_conn)
 
     from web.auth import auth_bp
     from web.routes import main_bp
