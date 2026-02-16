@@ -230,6 +230,56 @@ def sync_clients():
 
 
 # ---------------------------------------------------------------------------
+# Full sync (Sheets -> PG clients + APIs -> PG metrics)
+# ---------------------------------------------------------------------------
+@api_bp.route("/full-sync", methods=["POST"])
+@login_required
+def full_sync():
+    """Full sync: sync clients from Sheets then collect metrics for ALL clients."""
+    body = request.get_json(force=True) if request.data else {}
+    freq = body.get("freq", "SEMANAL").upper()
+
+    def run_full_sync():
+        # Phase 1: Sync clients from Sheets
+        broadcast_event("full_sync_progress", {
+            "phase": 1, "phase_label": "Sincronizando clientes...",
+            "done": 0, "total": 0, "detail": "",
+        })
+
+        from web.sync import sync_clientes_from_sheets
+        sync_result = sync_clientes_from_sheets()
+
+        broadcast_event("full_sync_progress", {
+            "phase": 1, "phase_label": "Clientes sincronizados",
+            "done": sync_result["synced"], "total": sync_result["synced"],
+            "detail": f'{sync_result["synced"]} clientes',
+        })
+
+        # Phase 2: Collect metrics for ALL clients
+        from web.metrics_collector import collect_all_client_metrics
+
+        def on_progress(done, total, client_name, status):
+            broadcast_event("full_sync_progress", {
+                "phase": 2, "phase_label": "Coletando metricas...",
+                "done": done, "total": total,
+                "detail": f"{client_name}: {'ok' if status == 'ok' else 'erro'}",
+            })
+
+        collect_result = collect_all_client_metrics(freq, progress_callback=on_progress)
+
+        broadcast_event("full_sync_complete", {
+            "synced": sync_result["synced"],
+            "collected_total": collect_result["total"],
+            "collected_ok": collect_result["ok"],
+            "collected_errors": collect_result["errors"],
+        })
+
+    t = threading.Thread(target=run_full_sync, daemon=True)
+    t.start()
+    return jsonify({"status": "started"}), 202
+
+
+# ---------------------------------------------------------------------------
 # Client update (still writes to Sheets directly)
 # ---------------------------------------------------------------------------
 _FIELD_TO_COL = {

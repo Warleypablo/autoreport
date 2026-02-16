@@ -121,6 +121,57 @@ def collect_metrics_for_gestor(
     return {"total": total, "ok": ok_count, "errors": err_count, "results": results}
 
 
+def collect_all_client_metrics(
+    freq: str = "SEMANAL",
+    progress_callback=None,
+):
+    """Collect metrics for ALL clients in the database (no gestor filter).
+
+    Args:
+        freq: "SEMANAL" or "MENSAL"
+        progress_callback: Optional callable(done, total, client_name, status)
+
+    Returns:
+        {"total": int, "ok": int, "errors": int, "results": [...]}
+    """
+    import json
+    import psycopg2.extras
+    from web.pg_db import get_standalone_conn
+
+    conn = get_standalone_conn()
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM clientes ORDER BY nome")
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.close()
+    finally:
+        conn.close()
+
+    for r in rows:
+        if isinstance(r.get("extras"), str):
+            r["extras"] = json.loads(r["extras"])
+
+    total = len(rows)
+    results = []
+    ok_count = 0
+    err_count = 0
+
+    for i, row in enumerate(rows):
+        cliente = _build_cliente_from_row(row)
+        result = _collect_for_client(cliente, freq)
+        results.append(result)
+
+        if result["status"] == "ok":
+            ok_count += 1
+        else:
+            err_count += 1
+
+        if progress_callback:
+            progress_callback(i + 1, total, result["client"], result["status"])
+
+    return {"total": total, "ok": ok_count, "errors": err_count, "results": results}
+
+
 def collect_metrics_for_clients(
     client_names: List[str],
     freq: str = "SEMANAL",

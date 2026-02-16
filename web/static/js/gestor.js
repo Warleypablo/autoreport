@@ -2,6 +2,9 @@
 
 let gestorEvtSource = null;
 
+// ─────────────────────────────────────────────
+// Load gestores dropdown
+// ─────────────────────────────────────────────
 async function loadGestores() {
     try {
         const resp = await fetch('/api/gestores');
@@ -9,7 +12,6 @@ async function loadGestores() {
         const select = document.getElementById('gestor-select');
         if (!select) return;
 
-        // Keep the placeholder option
         select.innerHTML = '<option value="">Selecione um gestor...</option>';
         gestores.forEach(g => {
             const opt = document.createElement('option');
@@ -18,13 +20,15 @@ async function loadGestores() {
             select.appendChild(opt);
         });
 
-        // Init SSE for collect progress
         initGestorSSE();
     } catch (err) {
         showToast('Erro ao carregar gestores: ' + err.message, 'error');
     }
 }
 
+// ─────────────────────────────────────────────
+// Load gestor dashboard data
+// ─────────────────────────────────────────────
 async function loadGestorDashboard() {
     const select = document.getElementById('gestor-select');
     const nome = select ? select.value : '';
@@ -54,7 +58,7 @@ async function loadGestorDashboard() {
 
         if (loading) loading.classList.add('hidden');
 
-        // Render summary cards
+        // Summary cards
         if (summary) {
             summary.classList.remove('hidden');
             document.getElementById('sum-clientes').textContent = data.summary.total_clientes;
@@ -65,7 +69,7 @@ async function loadGestorDashboard() {
                 : '-';
         }
 
-        // Render platform breakdown
+        // Platform breakdown
         if (platforms) {
             platforms.classList.remove('hidden');
             document.getElementById('sum-vendas').textContent = data.summary.total_vendas || 0;
@@ -73,9 +77,14 @@ async function loadGestorDashboard() {
             document.getElementById('sum-inv-meta').textContent = formatBRL(data.summary.total_inv_meta);
         }
 
-        // Render clients table
+        // Client metrics table
         if (clients && data.clients.length > 0) {
             clients.classList.remove('hidden');
+
+            // Update count badge
+            const countBadge = document.getElementById('client-metrics-count');
+            if (countBadge) countBadge.textContent = `${data.clients.length} clientes com metricas`;
+
             const tbody = document.getElementById('gestor-clients-tbody');
             tbody.innerHTML = data.clients.map(c => `
                 <tr>
@@ -95,7 +104,7 @@ async function loadGestorDashboard() {
             `).join('');
         }
 
-        // Render clients without metrics
+        // Clients without metrics
         if (noMetrics && data.clients_no_metrics && data.clients_no_metrics.length > 0) {
             noMetrics.classList.remove('hidden');
             const list = document.getElementById('gestor-no-metrics-list');
@@ -116,97 +125,181 @@ async function loadGestorDashboard() {
 }
 
 // ─────────────────────────────────────────────
-// Metrics collection
+// Full Sync (Sync clients + Collect all metrics)
 // ─────────────────────────────────────────────
-async function collectMetrics() {
-    const select = document.getElementById('gestor-select');
-    const gestor = select ? select.value : '';
-    if (!gestor) {
-        showToast('Selecione um gestor primeiro', 'error');
-        return;
-    }
-
+async function fullSync() {
     const freq = document.getElementById('freq-select-gestor')?.value || 'SEMANAL';
-    const btn = document.getElementById('btn-collect-metrics');
+    const btn = document.getElementById('btn-full-sync');
+
+    // Disable button and show spinning state
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Coletando...';
+        btn.innerHTML = `
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            Sincronizando...`;
     }
 
-    // Show progress bar
-    const progress = document.getElementById('collect-progress');
-    if (progress) progress.classList.remove('hidden');
-    updateCollectProgress(0, 0, '');
+    // Show stepper
+    const stepper = document.getElementById('sync-stepper');
+    if (stepper) stepper.classList.remove('hidden');
+    resetStepper();
+    updateStepperPhase(1);
 
     try {
-        const resp = await fetch('/api/collect-metrics', {
+        const resp = await fetch('/api/full-sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gestor, freq }),
+            body: JSON.stringify({ freq }),
         });
         const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || 'Erro ao iniciar coleta');
-        showToast('Coleta de metricas iniciada...', 'info');
+        if (!resp.ok) throw new Error(data.error || 'Erro ao iniciar sincronizacao');
     } catch (err) {
         showToast('Erro: ' + err.message, 'error');
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = 'Coletar Metricas';
-        }
-        if (progress) progress.classList.add('hidden');
+        resetSyncButton();
+        if (stepper) stepper.classList.add('hidden');
     }
-}
-
-function updateCollectProgress(done, total, detail) {
-    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    const bar = document.getElementById('collect-progress-bar');
-    const text = document.getElementById('collect-progress-text');
-    const detailEl = document.getElementById('collect-progress-detail');
-
-    if (bar) bar.style.width = pct + '%';
-    if (text) text.textContent = `${done} de ${total}`;
-    if (detailEl) detailEl.textContent = detail;
-}
-
-function onCollectComplete(data) {
-    const hasErrors = data.errors > 0;
-    showToast(
-        `Coleta concluida: ${data.ok} ok, ${data.errors} erro(s) de ${data.total} clientes`,
-        hasErrors ? 'error' : 'success'
-    );
-
-    const btn = document.getElementById('btn-collect-metrics');
-    if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Coletar Metricas';
-    }
-
-    // Hide progress bar after a moment
-    setTimeout(() => {
-        const progress = document.getElementById('collect-progress');
-        if (progress) progress.classList.add('hidden');
-    }, 2000);
-
-    // Reload dashboard to show new metrics
-    loadGestorDashboard();
 }
 
 // ─────────────────────────────────────────────
-// SSE for collection progress
+// Stepper UI management
+// ─────────────────────────────────────────────
+function resetStepper() {
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const connector = document.getElementById('step-connector');
+
+    if (step1) { step1.className = 'flex items-center gap-2'; }
+    if (step2) { step2.className = 'flex items-center gap-2'; }
+    if (connector) { connector.className = 'step-connector'; }
+
+    updateSyncProgress(0, '');
+}
+
+function updateStepperPhase(phase) {
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const connector = document.getElementById('step-connector');
+
+    if (phase === 1) {
+        if (step1) step1.className = 'flex items-center gap-2 step-active';
+        if (step2) step2.className = 'flex items-center gap-2';
+        if (connector) connector.className = 'step-connector';
+    } else if (phase === 2) {
+        if (step1) step1.className = 'flex items-center gap-2 step-complete';
+        if (step2) step2.className = 'flex items-center gap-2 step-active';
+        if (connector) connector.className = 'step-connector active';
+    }
+}
+
+function completeAllSteps() {
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    const connector = document.getElementById('step-connector');
+
+    if (step1) step1.className = 'flex items-center gap-2 step-complete';
+    if (step2) step2.className = 'flex items-center gap-2 step-complete';
+    if (connector) connector.className = 'step-connector complete';
+}
+
+function updateSyncProgress(pct, text, detail) {
+    const bar = document.getElementById('sync-progress-bar');
+    const textEl = document.getElementById('sync-progress-text');
+    const detailEl = document.getElementById('sync-progress-detail');
+
+    if (bar) bar.style.width = pct + '%';
+    if (textEl) textEl.textContent = text || '';
+    if (detailEl) detailEl.textContent = detail || '';
+}
+
+function resetSyncButton() {
+    const btn = document.getElementById('btn-full-sync');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Sincronizar Tudo`;
+    }
+}
+
+// ─────────────────────────────────────────────
+// SSE for real-time progress
 // ─────────────────────────────────────────────
 function initGestorSSE() {
     if (gestorEvtSource) gestorEvtSource.close();
     gestorEvtSource = new EventSource('/api/status/stream');
 
+    // Full sync progress (phases 1 and 2)
+    gestorEvtSource.addEventListener('full_sync_progress', (e) => {
+        const data = JSON.parse(e.data);
+
+        updateStepperPhase(data.phase);
+
+        if (data.phase === 1) {
+            // Phase 1: syncing clients (indeterminate -> complete)
+            updateSyncProgress(
+                data.total > 0 ? 100 : 50,
+                data.phase_label,
+                data.detail
+            );
+        } else if (data.phase === 2) {
+            // Phase 2: collecting metrics (progress per client)
+            const pct = data.total > 0 ? Math.round((data.done / data.total) * 100) : 0;
+            updateSyncProgress(
+                pct,
+                `${data.done} de ${data.total}`,
+                data.detail
+            );
+        }
+    });
+
+    // Full sync complete
+    gestorEvtSource.addEventListener('full_sync_complete', (e) => {
+        const data = JSON.parse(e.data);
+
+        completeAllSteps();
+        updateSyncProgress(100, 'Concluido!', '');
+
+        const hasErrors = data.collected_errors > 0;
+        showToast(
+            `Sincronizacao completa: ${data.synced} clientes, ${data.collected_ok} metricas ok` +
+            (hasErrors ? `, ${data.collected_errors} erro(s)` : ''),
+            hasErrors ? 'error' : 'success'
+        );
+
+        resetSyncButton();
+
+        // Reload gestores list and dashboard
+        loadGestores().then(() => {
+            loadGestorDashboard();
+        });
+
+        // Hide stepper after a moment
+        setTimeout(() => {
+            const stepper = document.getElementById('sync-stepper');
+            if (stepper) stepper.classList.add('hidden');
+        }, 4000);
+    });
+
+    // Legacy: single gestor collect progress (if still used)
     gestorEvtSource.addEventListener('collect_progress', (e) => {
         const data = JSON.parse(e.data);
-        const status = data.status === 'ok' ? '✓' : '✗';
-        updateCollectProgress(data.done, data.total, `${data.client}: ${status}`);
+        const status = data.status === 'ok' ? '\u2713' : '\u2717';
+        const pct = data.total > 0 ? Math.round((data.done / data.total) * 100) : 0;
+        updateSyncProgress(pct, `${data.done} de ${data.total}`, `${data.client}: ${status}`);
     });
 
     gestorEvtSource.addEventListener('collect_complete', (e) => {
         const data = JSON.parse(e.data);
-        onCollectComplete(data);
+        const hasErrors = data.errors > 0;
+        showToast(
+            `Coleta concluida: ${data.ok} ok, ${data.errors} erro(s) de ${data.total} clientes`,
+            hasErrors ? 'error' : 'success'
+        );
+        resetSyncButton();
+        loadGestorDashboard();
     });
 
     gestorEvtSource.onerror = () => {
@@ -219,23 +312,8 @@ function initGestorSSE() {
 }
 
 // ─────────────────────────────────────────────
-// Sync and utilities
+// Utilities
 // ─────────────────────────────────────────────
-async function syncClientsFromGestor() {
-    try {
-        showToast('Sincronizando clientes...', 'info');
-        const resp = await fetch('/api/sync-clients', { method: 'POST' });
-        const data = await resp.json();
-        if (data.error) throw new Error(data.error);
-        showToast(`${data.synced} clientes sincronizados`, 'success');
-        // Reload gestores list and current dashboard
-        await loadGestores();
-        loadGestorDashboard();
-    } catch (err) {
-        showToast('Erro ao sincronizar: ' + err.message, 'error');
-    }
-}
-
 function formatBRL(value) {
     if (value == null || value === 0) return 'R$ 0,00';
     return 'R$ ' + Number(value).toLocaleString('pt-BR', {
