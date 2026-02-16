@@ -1,5 +1,7 @@
 /* Auto Report - Gestor Dashboard JavaScript */
 
+let gestorEvtSource = null;
+
 async function loadGestores() {
     try {
         const resp = await fetch('/api/gestores');
@@ -15,6 +17,9 @@ async function loadGestores() {
             opt.textContent = g;
             select.appendChild(opt);
         });
+
+        // Init SSE for collect progress
+        initGestorSSE();
     } catch (err) {
         showToast('Erro ao carregar gestores: ' + err.message, 'error');
     }
@@ -110,6 +115,112 @@ async function loadGestorDashboard() {
     }
 }
 
+// ─────────────────────────────────────────────
+// Metrics collection
+// ─────────────────────────────────────────────
+async function collectMetrics() {
+    const select = document.getElementById('gestor-select');
+    const gestor = select ? select.value : '';
+    if (!gestor) {
+        showToast('Selecione um gestor primeiro', 'error');
+        return;
+    }
+
+    const freq = document.getElementById('freq-select-gestor')?.value || 'SEMANAL';
+    const btn = document.getElementById('btn-collect-metrics');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Coletando...';
+    }
+
+    // Show progress bar
+    const progress = document.getElementById('collect-progress');
+    if (progress) progress.classList.remove('hidden');
+    updateCollectProgress(0, 0, '');
+
+    try {
+        const resp = await fetch('/api/collect-metrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gestor, freq }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erro ao iniciar coleta');
+        showToast('Coleta de metricas iniciada...', 'info');
+    } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Coletar Metricas';
+        }
+        if (progress) progress.classList.add('hidden');
+    }
+}
+
+function updateCollectProgress(done, total, detail) {
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    const bar = document.getElementById('collect-progress-bar');
+    const text = document.getElementById('collect-progress-text');
+    const detailEl = document.getElementById('collect-progress-detail');
+
+    if (bar) bar.style.width = pct + '%';
+    if (text) text.textContent = `${done} de ${total}`;
+    if (detailEl) detailEl.textContent = detail;
+}
+
+function onCollectComplete(data) {
+    const hasErrors = data.errors > 0;
+    showToast(
+        `Coleta concluida: ${data.ok} ok, ${data.errors} erro(s) de ${data.total} clientes`,
+        hasErrors ? 'error' : 'success'
+    );
+
+    const btn = document.getElementById('btn-collect-metrics');
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Coletar Metricas';
+    }
+
+    // Hide progress bar after a moment
+    setTimeout(() => {
+        const progress = document.getElementById('collect-progress');
+        if (progress) progress.classList.add('hidden');
+    }, 2000);
+
+    // Reload dashboard to show new metrics
+    loadGestorDashboard();
+}
+
+// ─────────────────────────────────────────────
+// SSE for collection progress
+// ─────────────────────────────────────────────
+function initGestorSSE() {
+    if (gestorEvtSource) gestorEvtSource.close();
+    gestorEvtSource = new EventSource('/api/status/stream');
+
+    gestorEvtSource.addEventListener('collect_progress', (e) => {
+        const data = JSON.parse(e.data);
+        const status = data.status === 'ok' ? '✓' : '✗';
+        updateCollectProgress(data.done, data.total, `${data.client}: ${status}`);
+    });
+
+    gestorEvtSource.addEventListener('collect_complete', (e) => {
+        const data = JSON.parse(e.data);
+        onCollectComplete(data);
+    });
+
+    gestorEvtSource.onerror = () => {
+        setTimeout(() => {
+            if (gestorEvtSource && gestorEvtSource.readyState === EventSource.CLOSED) {
+                initGestorSSE();
+            }
+        }, 5000);
+    };
+}
+
+// ─────────────────────────────────────────────
+// Sync and utilities
+// ─────────────────────────────────────────────
 async function syncClientsFromGestor() {
     try {
         showToast('Sincronizando clientes...', 'info');

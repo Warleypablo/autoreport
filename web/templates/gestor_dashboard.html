@@ -11,11 +11,33 @@
                 <option value="">Selecione um gestor...</option>
             </select>
         </div>
-        <button onclick="syncClientsFromGestor()" class="btn-secondary" title="Sincronizar clientes da planilha">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
-            Sincronizar
-        </button>
+        <div class="flex items-center gap-2">
+            <select id="freq-select-gestor" class="select-field w-32">
+                <option value="SEMANAL">Semanal</option>
+                <option value="MENSAL">Mensal</option>
+            </select>
+            <button id="btn-collect-metrics" onclick="collectMetrics()" class="btn-primary" title="Coletar metricas das APIs (Google Ads, Meta, GA4)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Coletar Metricas
+            </button>
+            <button onclick="syncClientsFromGestor()" class="btn-secondary" title="Sincronizar clientes da planilha">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
+                Sincronizar
+            </button>
+        </div>
     </div>
+</div>
+
+<!-- Collection progress -->
+<div id="collect-progress" class="hidden card p-4 mb-6">
+    <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-medium text-surface-700 dark:text-surface-200">Coletando metricas...</span>
+        <span id="collect-progress-text" class="text-sm text-surface-400">0 de 0</span>
+    </div>
+    <div class="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-2">
+        <div id="collect-progress-bar" class="bg-primary-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+    </div>
+    <div id="collect-progress-detail" class="text-xs text-surface-400 mt-2"></div>
 </div>
 
 <!-- Loading -->

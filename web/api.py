@@ -169,6 +169,50 @@ def _trigger_background_sync():
 
 
 # ---------------------------------------------------------------------------
+# Metrics collection (APIs -> PG, without report generation)
+# ---------------------------------------------------------------------------
+@api_bp.route("/collect-metrics", methods=["POST"])
+@login_required
+def collect_metrics():
+    """Collect metrics from APIs for a gestor's clients (background thread)."""
+    body = request.get_json(force=True) if request.data else {}
+    gestor = body.get("gestor", "")
+    clients = body.get("clients", [])
+    freq = body.get("freq", "SEMANAL").upper()
+
+    if not gestor and not clients:
+        return jsonify({"error": "Informe 'gestor' ou 'clients'"}), 400
+
+    def run_collection():
+        from web.metrics_collector import (
+            collect_metrics_for_gestor,
+            collect_metrics_for_clients,
+        )
+
+        def on_progress(done, total, client_name, status):
+            broadcast_event("collect_progress", {
+                "done": done, "total": total,
+                "client": client_name, "status": status,
+            })
+
+        if gestor:
+            result = collect_metrics_for_gestor(gestor, freq, progress_callback=on_progress)
+        else:
+            result = collect_metrics_for_clients(clients, freq, progress_callback=on_progress)
+
+        broadcast_event("collect_complete", {
+            "total": result["total"],
+            "ok": result["ok"],
+            "errors": result["errors"],
+        })
+
+    t = threading.Thread(target=run_collection, daemon=True)
+    t.start()
+
+    return jsonify({"status": "started"}), 202
+
+
+# ---------------------------------------------------------------------------
 # Client sync (Sheets -> PG)
 # ---------------------------------------------------------------------------
 @api_bp.route("/sync-clients", methods=["POST"])
