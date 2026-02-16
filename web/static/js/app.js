@@ -5,6 +5,17 @@ let currentJobId = null;
 let evtSource = null;
 
 // ─────────────────────────────────────────────
+// Theme toggle
+// ─────────────────────────────────────────────
+function toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.classList.contains('dark');
+    html.classList.remove(isDark ? 'dark' : 'light');
+    html.classList.add(isDark ? 'light' : 'dark');
+    localStorage.setItem('theme', isDark ? 'light' : 'dark');
+}
+
+// ─────────────────────────────────────────────
 // SSE (Server-Sent Events)
 // ─────────────────────────────────────────────
 function initSSE() {
@@ -111,27 +122,27 @@ function renderClients() {
     document.getElementById('client-count').textContent = filtered.length;
 
     tbody.innerHTML = filtered.map(c => `
-        <tr data-client="${escapeHtml(c.nome)}" class="border-b border-gray-100">
+        <tr data-client="${escapeHtml(c.nome)}">
             <td class="px-4 py-3">
-                <input type="checkbox" class="client-checkbox rounded" value="${escapeHtml(c.nome)}" onchange="updateSelectedCount()">
+                <input type="checkbox" class="client-checkbox rounded border-surface-300 dark:border-surface-600 dark:bg-surface-700" value="${escapeHtml(c.nome)}" onchange="updateSelectedCount()">
             </td>
             <td class="px-4 py-3">
-                <a href="/client/${encodeURIComponent(c.nome)}" class="text-sm font-medium text-primary-700 hover:text-primary-900">
+                <a href="/client/${encodeURIComponent(c.nome)}" class="text-sm font-medium text-primary-600 hover:text-primary-500">
                     ${escapeHtml(c.nome)}
                 </a>
             </td>
             <td class="px-4 py-3">
-                <span class="text-sm text-gray-600">${escapeHtml(c.categoria)}</span>
+                <span class="text-sm text-surface-500 dark:text-surface-400">${escapeHtml(c.categoria)}</span>
             </td>
             <td class="px-4 py-3">
                 <span class="status-badge ${getStatusClass(c.status)}">${escapeHtml(c.status || '-')}</span>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-600">${escapeHtml(c.ultima_geracao || '-')}</td>
+            <td class="px-4 py-3 text-sm text-surface-500 dark:text-surface-400">${escapeHtml(c.ultima_geracao || '-')}</td>
             <td class="px-4 py-3 actions-cell">
-                <button onclick="generateSingle('${escapeHtml(c.nome)}')" class="text-xs text-primary-600 hover:text-primary-800 font-medium">
+                <button onclick="generateSingle('${escapeHtml(c.nome)}')" class="text-xs text-primary-600 hover:text-primary-500 font-medium">
                     Gerar
                 </button>
-                <button onclick="openEditModal('${escapeHtml(c.nome)}')" class="text-xs text-gray-500 hover:text-gray-700 font-medium ml-2" title="Configuracoes">
+                <button onclick="openEditModal('${escapeHtml(c.nome)}')" class="text-xs text-surface-400 hover:text-surface-300 font-medium ml-2" title="Configuracoes">
                     &#9881;
                 </button>
             </td>
@@ -313,7 +324,7 @@ function updateClientRow(clientName, status, presentationUrl) {
             const existingLink = actionsCell.querySelector('.report-link');
             if (!existingLink) {
                 actionsCell.insertAdjacentHTML('beforeend',
-                    ` <a href="${escapeHtml(presentationUrl)}" target="_blank" class="report-link text-xs text-green-700 hover:text-green-900 font-medium ml-2">Abrir Relatorio</a>`
+                    ` <a href="${escapeHtml(presentationUrl)}" target="_blank" class="report-link text-xs text-emerald-500 hover:text-emerald-400 font-medium ml-2">Abrir Relatorio</a>`
                 );
             }
         }
@@ -349,27 +360,27 @@ async function loadHistory() {
 
         container.classList.remove('hidden');
         container.innerHTML = jobs.map(job => `
-            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div class="p-4 cursor-pointer hover:bg-gray-50 transition" onclick="toggleHistoryDetail('${job.id}')">
+            <div class="card overflow-hidden">
+                <div class="p-4 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-700/50 transition" onclick="toggleHistoryDetail('${job.id}')">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <span class="status-badge ${getStatusClass(job.status)}">${escapeHtml(job.status)}</span>
-                            <span class="text-sm font-medium text-gray-800">${escapeHtml(job.freq)}</span>
-                            <span class="text-sm text-gray-500">${formatDate(job.created_at)}</span>
+                            <span class="text-sm font-medium text-surface-700 dark:text-surface-200">${escapeHtml(job.freq)}</span>
+                            <span class="text-sm text-surface-400">${formatDate(job.created_at)}</span>
                         </div>
-                        <div class="flex items-center gap-4 text-sm text-gray-600">
+                        <div class="flex items-center gap-4 text-sm text-surface-500 dark:text-surface-400">
                             <span>${job.completed}/${job.total} clientes</span>
-                            ${job.errors > 0 ? `<span class="text-red-600">${job.errors} erro(s)</span>` : ''}
-                            <span class="text-gray-400">por ${escapeHtml(job.started_by || '-')}</span>
-                            <span class="text-gray-400">&#9660;</span>
+                            ${job.errors > 0 ? `<span class="text-red-500">${job.errors} erro(s)</span>` : ''}
+                            <span class="text-surface-400">por ${escapeHtml(job.started_by || '-')}</span>
+                            <span class="text-surface-400">&#9660;</span>
                         </div>
                     </div>
                 </div>
-                <div id="history-detail-${job.id}" class="history-details border-t border-gray-100">
+                <div id="history-detail-${job.id}" class="history-details border-t border-surface-200 dark:border-surface-700">
                     <div class="p-4">
                         <table class="w-full text-sm">
                             <thead>
-                                <tr class="text-left text-xs text-gray-500">
+                                <tr class="text-left text-xs text-surface-400">
                                     <th class="pb-2">Cliente</th>
                                     <th class="pb-2">Categoria</th>
                                     <th class="pb-2">Status</th>
@@ -379,12 +390,12 @@ async function loadHistory() {
                             </thead>
                             <tbody>
                                 ${(job.results || []).map(r => `
-                                    <tr class="border-t border-gray-50">
-                                        <td class="py-2 font-medium text-gray-700">${escapeHtml(r.client_name)}</td>
-                                        <td class="py-2 text-gray-500">${escapeHtml(r.category || '-')}</td>
+                                    <tr class="border-t border-surface-100 dark:border-surface-700/50">
+                                        <td class="py-2 font-medium text-surface-700 dark:text-surface-200">${escapeHtml(r.client_name)}</td>
+                                        <td class="py-2 text-surface-400">${escapeHtml(r.category || '-')}</td>
                                         <td class="py-2"><span class="status-badge ${getStatusClass(r.status)}">${escapeHtml(r.status)}</span></td>
-                                        <td class="py-2">${r.presentation_url ? `<a href="${escapeHtml(r.presentation_url)}" target="_blank" class="text-xs text-green-700 hover:text-green-900 font-medium">Abrir</a>` : '-'}</td>
-                                        <td class="py-2 text-red-600 text-xs">${escapeHtml(r.error_detail || '')}</td>
+                                        <td class="py-2">${r.presentation_url ? `<a href="${escapeHtml(r.presentation_url)}" target="_blank" class="text-xs text-emerald-500 hover:text-emerald-400 font-medium">Abrir</a>` : '-'}</td>
+                                        <td class="py-2 text-red-500 text-xs">${escapeHtml(r.error_detail || '')}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -453,14 +464,14 @@ async function loadClientDetail(clientName) {
 
         if (client && infoEl) {
             infoEl.innerHTML = `
-                <div class="flex justify-between"><span class="text-gray-500">Categoria</span><span class="font-medium">${escapeHtml(client.categoria)}</span></div>
-                <div class="flex justify-between"><span class="text-gray-500">Status</span><span class="status-badge ${getStatusClass(client.status)}">${escapeHtml(client.status || '-')}</span></div>
-                <div class="flex justify-between"><span class="text-gray-500">Ultima Geracao</span><span class="font-medium">${escapeHtml(client.ultima_geracao || '-')}</span></div>
-                ${client.painel_url ? `<div><span class="text-gray-500">Painel</span><br><a href="${escapeHtml(client.painel_url)}" target="_blank" class="text-xs text-primary-600 hover:text-primary-800 break-all">Abrir painel</a></div>` : ''}
-                ${client.pasta_url ? `<div><span class="text-gray-500">Pasta</span><br><a href="${escapeHtml(client.pasta_url)}" target="_blank" class="text-xs text-primary-600 hover:text-primary-800 break-all">Abrir pasta</a></div>` : ''}
-                <div class="flex justify-between"><span class="text-gray-500">Google Ads</span><span class="text-xs font-mono">${escapeHtml(client.id_google_ads || '-')}</span></div>
-                <div class="flex justify-between"><span class="text-gray-500">Meta Ads</span><span class="text-xs font-mono">${escapeHtml(client.id_meta_ads || '-')}</span></div>
-                <div class="flex justify-between"><span class="text-gray-500">GA4</span><span class="text-xs font-mono">${escapeHtml(client.id_ga4 || '-')}</span></div>
+                <div class="flex justify-between"><span class="text-surface-400">Categoria</span><span class="font-medium text-surface-700 dark:text-surface-200">${escapeHtml(client.categoria)}</span></div>
+                <div class="flex justify-between"><span class="text-surface-400">Status</span><span class="status-badge ${getStatusClass(client.status)}">${escapeHtml(client.status || '-')}</span></div>
+                <div class="flex justify-between"><span class="text-surface-400">Ultima Geracao</span><span class="font-medium text-surface-700 dark:text-surface-200">${escapeHtml(client.ultima_geracao || '-')}</span></div>
+                ${client.painel_url ? `<div><span class="text-surface-400">Painel</span><br><a href="${escapeHtml(client.painel_url)}" target="_blank" class="text-xs text-primary-500 hover:text-primary-400 break-all">Abrir painel</a></div>` : ''}
+                ${client.pasta_url ? `<div><span class="text-surface-400">Pasta</span><br><a href="${escapeHtml(client.pasta_url)}" target="_blank" class="text-xs text-primary-500 hover:text-primary-400 break-all">Abrir pasta</a></div>` : ''}
+                <div class="flex justify-between"><span class="text-surface-400">Google Ads</span><span class="text-xs font-mono text-surface-600 dark:text-surface-300">${escapeHtml(client.id_google_ads || '-')}</span></div>
+                <div class="flex justify-between"><span class="text-surface-400">Meta Ads</span><span class="text-xs font-mono text-surface-600 dark:text-surface-300">${escapeHtml(client.id_meta_ads || '-')}</span></div>
+                <div class="flex justify-between"><span class="text-surface-400">GA4</span><span class="text-xs font-mono text-surface-600 dark:text-surface-300">${escapeHtml(client.id_ga4 || '-')}</span></div>
             `;
         }
     } catch (err) {
@@ -482,20 +493,20 @@ async function loadClientDetail(clientName) {
 
         if (histEl) {
             if (!clientResults.length) {
-                histEl.innerHTML = '<p class="text-gray-500 text-sm">Nenhuma geracao registrada.</p>';
+                histEl.innerHTML = '<p class="text-surface-400 text-sm">Nenhuma geracao registrada.</p>';
             } else {
                 histEl.innerHTML = `
                     <table class="w-full text-sm">
-                        <thead><tr class="text-left text-xs text-gray-500">
+                        <thead><tr class="text-left text-xs text-surface-400">
                             <th class="pb-2">Data</th><th class="pb-2">Freq</th><th class="pb-2">Status</th><th class="pb-2">Erro</th>
                         </tr></thead>
                         <tbody>
                             ${clientResults.map(r => `
-                                <tr class="border-t border-gray-100">
-                                    <td class="py-2 text-gray-600">${formatDate(r.job_date)}</td>
-                                    <td class="py-2 text-gray-600">${escapeHtml(r.freq)}</td>
+                                <tr class="border-t border-surface-200 dark:border-surface-700/50">
+                                    <td class="py-2 text-surface-500 dark:text-surface-400">${formatDate(r.job_date)}</td>
+                                    <td class="py-2 text-surface-500 dark:text-surface-400">${escapeHtml(r.freq)}</td>
                                     <td class="py-2"><span class="status-badge ${getStatusClass(r.status)}">${escapeHtml(r.status)}</span></td>
-                                    <td class="py-2 text-red-600 text-xs">${escapeHtml(r.error_detail || '')}</td>
+                                    <td class="py-2 text-red-500 text-xs">${escapeHtml(r.error_detail || '')}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -532,14 +543,14 @@ function openEditModal(clientName) {
     const extrasContainer = document.getElementById('edit-extras-container');
     extrasContainer.innerHTML = '';
     if (client.extras && Object.keys(client.extras).length > 0) {
-        extrasContainer.innerHTML = '<div class="border-t border-gray-200 pt-3 mt-2"><p class="text-xs font-semibold text-gray-500 uppercase mb-3">Campos adicionais</p></div>';
+        extrasContainer.innerHTML = '<div class="border-t border-surface-200 dark:border-surface-700 pt-3 mt-2"><p class="text-xs font-semibold text-surface-400 uppercase mb-3">Campos adicionais</p></div>';
         for (const [key, value] of Object.entries(client.extras)) {
             const fieldId = `edit-extra-${key.replace(/[^a-zA-Z0-9]/g, '_')}`;
             extrasContainer.innerHTML += `
                 <div class="mb-3">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">${escapeHtml(key)}</label>
+                    <label class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-1">${escapeHtml(key)}</label>
                     <input type="text" id="${fieldId}" data-extra-key="${escapeHtml(key)}" value="${escapeHtml(value || '')}"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                           class="input-field">
                 </div>
             `;
         }

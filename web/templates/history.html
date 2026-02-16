@@ -3,22 +3,26 @@
 
 {% block content %}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-xl font-bold text-gray-800">Historico de Geracoes</h1>
-    <button onclick="loadHistory()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition">
-        &#8635; Atualizar
+    <h1 class="text-xl font-bold text-surface-700 dark:text-surface-200">Historico de Geracoes</h1>
+    <button onclick="loadHistory()" class="btn-secondary">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Atualizar
     </button>
 </div>
 
-<div id="history-loading" class="text-center py-12">
-    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-    <p class="text-gray-500 mt-3">Carregando historico...</p>
+<div id="history-loading" class="text-center py-16">
+    <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-primary-600 border-t-transparent"></div>
+    <p class="text-surface-400 mt-3 text-sm">Carregando historico...</p>
 </div>
 
-<div id="history-empty" class="hidden text-center py-12">
-    <p class="text-gray-500">Nenhuma geracao registrada ainda.</p>
+<div id="history-empty" class="hidden text-center py-16">
+    <div class="w-12 h-12 bg-surface-200 dark:bg-surface-800 rounded-full flex items-center justify-center mx-auto mb-3">
+        <svg class="w-6 h-6 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    </div>
+    <p class="text-surface-400">Nenhuma geracao registrada ainda.</p>
 </div>
 
-<div id="history-container" class="hidden space-y-4">
+<div id="history-container" class="hidden space-y-3">
 </div>
 {% endblock %}
 

@@ -3,52 +3,50 @@
 
 {% block content %}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-xl font-bold text-gray-800">Logs do Sistema</h1>
+    <h1 class="text-xl font-bold text-surface-700 dark:text-surface-200">Logs do Sistema</h1>
     <div class="flex items-center gap-3">
-        <label class="flex items-center gap-2 text-sm text-gray-600">
-            <input type="checkbox" id="auto-refresh" class="rounded">
+        <label class="flex items-center gap-2 text-sm text-surface-400 cursor-pointer">
+            <input type="checkbox" id="auto-refresh" class="rounded border-surface-300 dark:border-surface-600 dark:bg-surface-700">
             Auto-refresh
         </label>
-        <button onclick="loadLogs()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition">
-            &#8635; Atualizar
+        <button onclick="loadLogs()" class="btn-secondary">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Atualizar
         </button>
     </div>
 </div>
 
 <!-- Filters -->
-<div class="bg-white rounded-xl shadow-sm p-4 mb-4">
+<div class="card p-4 mb-4">
     <div class="flex flex-wrap items-center gap-4">
-        <div>
-            <label class="text-sm font-medium text-gray-700">Cliente:</label>
-            <input type="text" id="log-client-filter" placeholder="Filtrar por cliente..."
-                   class="ml-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none w-48">
+        <div class="flex items-center gap-2">
+            <label class="text-sm font-medium text-surface-400">Cliente:</label>
+            <input type="text" id="log-client-filter" placeholder="Filtrar por cliente..." class="input-field w-48">
         </div>
-        <div>
-            <label class="text-sm font-medium text-gray-700">Nivel:</label>
-            <select id="log-level-filter" class="ml-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+        <div class="flex items-center gap-2">
+            <label class="text-sm font-medium text-surface-400">Nivel:</label>
+            <select id="log-level-filter" class="select-field">
                 <option value="">Todos</option>
                 <option value="ERROR">ERROR</option>
                 <option value="WARNING">WARNING</option>
                 <option value="INFO">INFO</option>
             </select>
         </div>
-        <div>
-            <label class="text-sm font-medium text-gray-700">Linhas:</label>
-            <select id="log-lines" class="ml-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+        <div class="flex items-center gap-2">
+            <label class="text-sm font-medium text-surface-400">Linhas:</label>
+            <select id="log-lines" class="select-field">
                 <option value="100">100</option>
                 <option value="200" selected>200</option>
                 <option value="500">500</option>
             </select>
         </div>
-        <button onclick="loadLogs()" class="px-4 py-1.5 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition">
-            Filtrar
-        </button>
+        <button onclick="loadLogs()" class="btn-primary">Filtrar</button>
     </div>
 </div>
 
 <!-- Log output -->
-<div class="bg-gray-900 rounded-xl shadow-sm p-4 overflow-auto max-h-[70vh]">
-    <pre id="log-output" class="text-xs text-green-400 font-mono whitespace-pre-wrap leading-relaxed">Carregando logs...</pre>
+<div class="bg-surface-900 dark:bg-surface-950 rounded-xl border border-surface-200 dark:border-surface-800 p-4 overflow-auto max-h-[70vh]">
+    <pre id="log-output" class="text-xs text-emerald-400 font-mono whitespace-pre-wrap leading-relaxed">Carregando logs...</pre>
 </div>
 {% endblock %}
 
