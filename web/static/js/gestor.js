@@ -129,6 +129,7 @@ async function loadGestorDashboard() {
 // ─────────────────────────────────────────────
 async function fullSync() {
     const freq = document.getElementById('freq-select-gestor')?.value || 'SEMANAL';
+    const gestor = document.getElementById('gestor-select')?.value || '';
     const btn = document.getElementById('btn-full-sync');
 
     // Disable button and show spinning state
@@ -152,7 +153,7 @@ async function fullSync() {
         const resp = await fetch('/api/full-sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ freq }),
+            body: JSON.stringify({ freq, gestor }),
         });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || 'Erro ao iniciar sincronizacao');

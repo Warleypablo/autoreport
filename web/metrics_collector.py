@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from typing import List
 
 from utils.logger import get_logger
 
 log = get_logger(__name__)
+
+# Max parallel API calls (keep low to avoid rate limits)
+_MAX_WORKERS = 3
 
 
 def _build_cliente_from_row(row: dict):
@@ -61,12 +65,48 @@ def _collect_for_client(cliente, freq: str) -> dict:
         return {"client": cliente.nome, "status": "error", "detail": str(exc)}
 
 
+def _collect_parallel(rows, freq, progress_callback=None):
+    """Collect metrics for a list of client rows using ThreadPoolExecutor.
+
+    Returns {"total": int, "ok": int, "errors": int, "results": [...]}
+    """
+    total = len(rows)
+    if total == 0:
+        return {"total": 0, "ok": 0, "errors": 0, "results": []}
+
+    clientes = [_build_cliente_from_row(r) for r in rows]
+    results = []
+    ok_count = 0
+    err_count = 0
+    done_count = 0
+    lock = threading.Lock()
+
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+        futures = {
+            executor.submit(_collect_for_client, c, freq): c
+            for c in clientes
+        }
+        for future in as_completed(futures):
+            result = future.result()
+            with lock:
+                done_count += 1
+                results.append(result)
+                if result["status"] == "ok":
+                    ok_count += 1
+                else:
+                    err_count += 1
+                if progress_callback:
+                    progress_callback(done_count, total, result["client"], result["status"])
+
+    return {"total": total, "ok": ok_count, "errors": err_count, "results": results}
+
+
 def collect_metrics_for_gestor(
     gestor_name: str,
     freq: str = "SEMANAL",
     progress_callback=None,
 ):
-    """Collect metrics for all clients of a gestor.
+    """Collect metrics for all clients of a gestor (parallel).
 
     Args:
         gestor_name: Name of the gestor
@@ -92,47 +132,20 @@ def collect_metrics_for_gestor(
     finally:
         conn.close()
 
-    if not rows:
-        return {"total": 0, "ok": 0, "errors": 0, "results": []}
-
-    # Parse extras if stored as string
     for r in rows:
         if isinstance(r.get("extras"), str):
             r["extras"] = json.loads(r["extras"])
 
-    total = len(rows)
-    results = []
-    ok_count = 0
-    err_count = 0
-
-    for i, row in enumerate(rows):
-        cliente = _build_cliente_from_row(row)
-        result = _collect_for_client(cliente, freq)
-        results.append(result)
-
-        if result["status"] == "ok":
-            ok_count += 1
-        else:
-            err_count += 1
-
-        if progress_callback:
-            progress_callback(i + 1, total, result["client"], result["status"])
-
-    return {"total": total, "ok": ok_count, "errors": err_count, "results": results}
+    return _collect_parallel(rows, freq, progress_callback)
 
 
 def collect_all_client_metrics(
     freq: str = "SEMANAL",
     progress_callback=None,
 ):
-    """Collect metrics for ALL clients in the database (no gestor filter).
+    """Collect metrics for ALL clients in the database (parallel).
 
-    Args:
-        freq: "SEMANAL" or "MENSAL"
-        progress_callback: Optional callable(done, total, client_name, status)
-
-    Returns:
-        {"total": int, "ok": int, "errors": int, "results": [...]}
+    Returns {"total": int, "ok": int, "errors": int, "results": [...]}
     """
     import json
     import psycopg2.extras
@@ -151,25 +164,7 @@ def collect_all_client_metrics(
         if isinstance(r.get("extras"), str):
             r["extras"] = json.loads(r["extras"])
 
-    total = len(rows)
-    results = []
-    ok_count = 0
-    err_count = 0
-
-    for i, row in enumerate(rows):
-        cliente = _build_cliente_from_row(row)
-        result = _collect_for_client(cliente, freq)
-        results.append(result)
-
-        if result["status"] == "ok":
-            ok_count += 1
-        else:
-            err_count += 1
-
-        if progress_callback:
-            progress_callback(i + 1, total, result["client"], result["status"])
-
-    return {"total": total, "ok": ok_count, "errors": err_count, "results": results}
+    return _collect_parallel(rows, freq, progress_callback)
 
 
 def collect_metrics_for_clients(
@@ -177,15 +172,9 @@ def collect_metrics_for_clients(
     freq: str = "SEMANAL",
     progress_callback=None,
 ):
-    """Collect metrics for specific clients by name.
+    """Collect metrics for specific clients by name (parallel).
 
-    Args:
-        client_names: List of client names
-        freq: "SEMANAL" or "MENSAL"
-        progress_callback: Optional callable(done, total, client_name, status)
-
-    Returns:
-        {"total": int, "ok": int, "errors": int, "results": [...]}
+    Returns {"total": int, "ok": int, "errors": int, "results": [...]}
     """
     import json
     import psycopg2.extras
@@ -207,22 +196,4 @@ def collect_metrics_for_clients(
         if isinstance(r.get("extras"), str):
             r["extras"] = json.loads(r["extras"])
 
-    total = len(rows)
-    results = []
-    ok_count = 0
-    err_count = 0
-
-    for i, row in enumerate(rows):
-        cliente = _build_cliente_from_row(row)
-        result = _collect_for_client(cliente, freq)
-        results.append(result)
-
-        if result["status"] == "ok":
-            ok_count += 1
-        else:
-            err_count += 1
-
-        if progress_callback:
-            progress_callback(i + 1, total, result["client"], result["status"])
-
-    return {"total": total, "ok": ok_count, "errors": err_count, "results": results}
+    return _collect_parallel(rows, freq, progress_callback)

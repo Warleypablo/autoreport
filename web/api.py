@@ -235,9 +235,14 @@ def sync_clients():
 @api_bp.route("/full-sync", methods=["POST"])
 @login_required
 def full_sync():
-    """Full sync: sync clients from Sheets then collect metrics for ALL clients."""
+    """Full sync: sync clients from Sheets then collect metrics.
+
+    If 'gestor' is provided, only collect metrics for that gestor's clients.
+    Otherwise, sync clients only (skip metric collection).
+    """
     body = request.get_json(force=True) if request.data else {}
     freq = body.get("freq", "SEMANAL").upper()
+    gestor = body.get("gestor", "").strip()
 
     def run_full_sync():
         # Phase 1: Sync clients from Sheets
@@ -255,17 +260,20 @@ def full_sync():
             "detail": f'{sync_result["synced"]} clientes',
         })
 
-        # Phase 2: Collect metrics for ALL clients
-        from web.metrics_collector import collect_all_client_metrics
+        # Phase 2: Collect metrics (scoped to gestor if provided)
+        if gestor:
+            from web.metrics_collector import collect_metrics_for_gestor
 
-        def on_progress(done, total, client_name, status):
-            broadcast_event("full_sync_progress", {
-                "phase": 2, "phase_label": "Coletando metricas...",
-                "done": done, "total": total,
-                "detail": f"{client_name}: {'ok' if status == 'ok' else 'erro'}",
-            })
+            def on_progress(done, total, client_name, status):
+                broadcast_event("full_sync_progress", {
+                    "phase": 2, "phase_label": f"Coletando metricas ({gestor})...",
+                    "done": done, "total": total,
+                    "detail": f"{client_name}: {'ok' if status == 'ok' else 'erro'}",
+                })
 
-        collect_result = collect_all_client_metrics(freq, progress_callback=on_progress)
+            collect_result = collect_metrics_for_gestor(gestor, freq, progress_callback=on_progress)
+        else:
+            collect_result = {"total": 0, "ok": 0, "errors": 0}
 
         broadcast_event("full_sync_complete", {
             "synced": sync_result["synced"],
