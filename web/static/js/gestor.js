@@ -110,6 +110,13 @@ async function loadGestorDashboard() {
                     <td class="px-4 py-3 text-sm text-right text-surface-500 dark:text-surface-400">${c.vendas != null ? c.vendas : '-'}</td>
                     <td class="px-4 py-3 text-sm text-right text-surface-500 dark:text-surface-400">${c.cpa != null ? formatBRL(c.cpa) : '-'}</td>
                     <td class="px-4 py-3 text-xs text-surface-400">${formatPeriodo(c.periodo_inicio, c.periodo_fim)}</td>
+                    <td class="px-4 py-3 text-center">
+                        <button onclick="removeClientFromGestor('${escapeHtml(c.cliente_nome)}')"
+                                class="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
+                                title="Remover cliente do gestor">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </td>
                 </tr>`;
             }).join('');
         }
@@ -119,12 +126,16 @@ async function loadGestorDashboard() {
             noMetrics.classList.remove('hidden');
             const list = document.getElementById('gestor-no-metrics-list');
             list.innerHTML = data.clients_no_metrics.map(c => `
-                <a href="/client/${encodeURIComponent(c.cliente_nome)}"
-                   class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium
-                          bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400
-                          hover:bg-surface-200 dark:hover:bg-surface-700 transition">
-                    ${escapeHtml(c.cliente_nome)}
-                </a>
+                <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium
+                       bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400">
+                    <a href="/client/${encodeURIComponent(c.cliente_nome)}"
+                       class="hover:text-primary-500 transition">${escapeHtml(c.cliente_nome)}</a>
+                    <button onclick="removeClientFromGestor('${escapeHtml(c.cliente_nome)}')"
+                            class="ml-1 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
+                            title="Remover">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </span>
             `).join('');
         }
 
@@ -342,6 +353,28 @@ function formatPeriodo(inicio, fim) {
         return di.toLocaleDateString('pt-BR') + ' - ' + df.toLocaleDateString('pt-BR');
     } catch {
         return `${inicio} - ${fim}`;
+    }
+}
+
+// ─────────────────────────────────────────────
+// Remove client from gestor
+// ─────────────────────────────────────────────
+async function removeClientFromGestor(clientName) {
+    if (!confirm(`Remover "${clientName}" deste gestor?`)) return;
+
+    try {
+        const resp = await fetch('/api/gestor/unassign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client: clientName }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erro ao remover');
+
+        showToast(`${clientName} removido do gestor`, 'success');
+        loadGestorDashboard();
+    } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
     }
 }
 

@@ -565,6 +565,33 @@ def assign_gestor():
     return jsonify({"updated": updated, "gestor": gestor})
 
 
+@api_bp.route("/gestor/unassign", methods=["POST"])
+@login_required
+def unassign_gestor():
+    """Remove gestor assignment from a client."""
+    body = request.get_json(force=True)
+    client_name = body.get("client", "").strip()
+
+    if not client_name:
+        return jsonify({"error": "Informe 'client'"}), 400
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE clientes SET gestor = NULL, updated_at = NOW() "
+        "WHERE LOWER(nome) = LOWER(%s) RETURNING nome",
+        (client_name,),
+    )
+    rows = cur.fetchall()
+    conn.commit()
+    cur.close()
+
+    if not rows:
+        return jsonify({"error": "Cliente nao encontrado"}), 404
+
+    return jsonify({"removed": rows[0][0]})
+
+
 @api_bp.route("/clientes/search")
 @login_required
 def search_clientes():
