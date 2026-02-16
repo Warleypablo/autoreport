@@ -45,6 +45,13 @@ async function loadGestorDashboard() {
         if (el) el.classList.add('hidden');
     });
 
+    // Toggle manage clients button visibility
+    const btnManage = document.getElementById('btn-manage-clients');
+    if (btnManage) {
+        if (nome) btnManage.classList.remove('hidden');
+        else btnManage.classList.add('hidden');
+    }
+
     if (!nome) {
         if (empty) empty.classList.remove('hidden');
         return;
@@ -335,5 +342,136 @@ function formatPeriodo(inicio, fim) {
         return di.toLocaleDateString('pt-BR') + ' - ' + df.toLocaleDateString('pt-BR');
     } catch {
         return `${inicio} - ${fim}`;
+    }
+}
+
+// ─────────────────────────────────────────────
+// Manage Clients (assign to gestor)
+// ─────────────────────────────────────────────
+let _selectedClients = new Set();
+let _searchTimer = null;
+
+function openManageClients() {
+    const gestor = document.getElementById('gestor-select')?.value || '';
+    if (!gestor) return;
+
+    const modal = document.getElementById('manage-clients-modal');
+    const label = document.getElementById('manage-gestor-label');
+    if (label) label.textContent = `Gestor: ${gestor}`;
+
+    _selectedClients.clear();
+    updateSelectedBar();
+
+    const input = document.getElementById('client-search-input');
+    if (input) input.value = '';
+    document.getElementById('client-search-results')?.classList.add('hidden');
+    document.getElementById('client-search-empty')?.classList.remove('hidden');
+
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeManageClients() {
+    const modal = document.getElementById('manage-clients-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function debounceSearchClients() {
+    if (_searchTimer) clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(searchClients, 300);
+}
+
+async function searchClients() {
+    const q = document.getElementById('client-search-input')?.value?.trim() || '';
+    const gestor = document.getElementById('gestor-select')?.value || '';
+
+    const resultsEl = document.getElementById('client-search-results');
+    const emptyEl = document.getElementById('client-search-empty');
+    const loadingEl = document.getElementById('client-search-loading');
+
+    if (q.length < 2) {
+        if (resultsEl) resultsEl.classList.add('hidden');
+        if (emptyEl) { emptyEl.classList.remove('hidden'); emptyEl.textContent = 'Digite ao menos 2 caracteres'; }
+        return;
+    }
+
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (resultsEl) resultsEl.classList.add('hidden');
+
+    try {
+        const resp = await fetch(`/api/clientes/search?q=${encodeURIComponent(q)}&exclude_gestor=${encodeURIComponent(gestor)}`);
+        const clients = await resp.json();
+
+        if (loadingEl) loadingEl.classList.add('hidden');
+
+        if (clients.length === 0) {
+            if (emptyEl) { emptyEl.classList.remove('hidden'); emptyEl.textContent = 'Nenhum cliente encontrado'; }
+            return;
+        }
+
+        if (resultsEl) {
+            resultsEl.classList.remove('hidden');
+            resultsEl.innerHTML = clients.map(c => {
+                const checked = _selectedClients.has(c.nome) ? 'checked' : '';
+                const gestorTag = c.gestor ? `<span class="text-xs text-surface-400 ml-2">(${escapeHtml(c.gestor)})</span>` : '';
+                return `
+                    <label class="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-50 dark:hover:bg-surface-800 cursor-pointer transition">
+                        <input type="checkbox" class="client-check rounded border-surface-300 dark:border-surface-600
+                               text-primary-600 focus:ring-primary-500"
+                               value="${escapeHtml(c.nome)}" ${checked}
+                               onchange="toggleClientSelection(this)">
+                        <div class="flex-1 min-w-0">
+                            <span class="text-sm font-medium text-surface-700 dark:text-surface-200 truncate block">${escapeHtml(c.nome)}</span>
+                            <span class="text-xs text-surface-400">${escapeHtml(c.categoria || '-')}</span>${gestorTag}
+                        </div>
+                    </label>`;
+            }).join('');
+        }
+    } catch (err) {
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (emptyEl) { emptyEl.classList.remove('hidden'); emptyEl.textContent = 'Erro ao buscar: ' + err.message; }
+    }
+}
+
+function toggleClientSelection(checkbox) {
+    if (checkbox.checked) {
+        _selectedClients.add(checkbox.value);
+    } else {
+        _selectedClients.delete(checkbox.value);
+    }
+    updateSelectedBar();
+}
+
+function updateSelectedBar() {
+    const bar = document.getElementById('manage-selected-bar');
+    const count = document.getElementById('manage-selected-count');
+
+    if (_selectedClients.size > 0) {
+        if (bar) bar.classList.remove('hidden');
+        if (count) count.textContent = `${_selectedClients.size} cliente(s) selecionado(s)`;
+    } else {
+        if (bar) bar.classList.add('hidden');
+    }
+}
+
+async function assignSelectedClients() {
+    const gestor = document.getElementById('gestor-select')?.value || '';
+    if (!gestor || _selectedClients.size === 0) return;
+
+    try {
+        const resp = await fetch('/api/gestor/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gestor, clients: Array.from(_selectedClients) }),
+        });
+        const data = await resp.json();
+
+        if (!resp.ok) throw new Error(data.error || 'Erro ao vincular');
+
+        showToast(`${data.updated.length} cliente(s) vinculados a ${gestor}`, 'success');
+        closeManageClients();
+        loadGestorDashboard();
+    } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
     }
 }

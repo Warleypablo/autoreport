@@ -523,6 +523,77 @@ def list_gestores():
         return jsonify({"error": str(exc)}), 500
 
 
+@api_bp.route("/gestor/assign", methods=["POST"])
+@login_required
+def assign_gestor():
+    """Assign a gestor to a list of clients (by exact or partial name match)."""
+    body = request.get_json(force=True)
+    gestor = body.get("gestor", "").strip()
+    client_names = body.get("clients", [])
+
+    if not gestor or not client_names:
+        return jsonify({"error": "Informe 'gestor' e 'clients'"}), 400
+
+    from web.sync import _normalize_name
+    gestor = _normalize_name(gestor) or gestor
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    updated = []
+    for name in client_names:
+        name = name.strip()
+        if not name:
+            continue
+        # Try exact match first, then ILIKE partial match
+        cur.execute(
+            "UPDATE clientes SET gestor = %s, updated_at = NOW() "
+            "WHERE LOWER(nome) = LOWER(%s) RETURNING nome",
+            (gestor, name),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            cur.execute(
+                "UPDATE clientes SET gestor = %s, updated_at = NOW() "
+                "WHERE LOWER(nome) LIKE LOWER(%s) RETURNING nome",
+                (gestor, f"%{name}%"),
+            )
+            rows = cur.fetchall()
+        updated.extend(r[0] for r in rows)
+
+    conn.commit()
+    cur.close()
+    return jsonify({"updated": updated, "gestor": gestor})
+
+
+@api_bp.route("/clientes/search")
+@login_required
+def search_clientes():
+    """Search clients by name (for assigning to gestores)."""
+    q = request.args.get("q", "").strip()
+    gestor = request.args.get("exclude_gestor", "").strip()
+
+    conn = get_pg_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    if gestor:
+        cur.execute("""
+            SELECT nome, categoria, gestor FROM clientes
+            WHERE LOWER(nome) LIKE LOWER(%s)
+              AND (gestor IS NULL OR gestor = '' OR LOWER(gestor) != LOWER(%s))
+            ORDER BY nome LIMIT 20
+        """, (f"%{q}%", gestor))
+    else:
+        cur.execute("""
+            SELECT nome, categoria, gestor FROM clientes
+            WHERE LOWER(nome) LIKE LOWER(%s)
+            ORDER BY nome LIMIT 20
+        """, (f"%{q}%",))
+
+    rows = [dict(r) for r in cur.fetchall()]
+    cur.close()
+    return jsonify(rows)
+
+
 @api_bp.route("/gestor/<path:nome>/dashboard")
 @login_required
 def gestor_dashboard(nome: str):
