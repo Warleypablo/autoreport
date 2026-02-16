@@ -4,11 +4,35 @@
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from datetime import datetime
 
 from utils.logger import get_logger
 
 log = get_logger(__name__)
+
+# Portuguese prepositions that stay lowercase in names
+_LOWER_PARTS = {"de", "da", "do", "das", "dos", "e"}
+
+
+def _normalize_name(raw: str | None) -> str | None:
+    """Normalize a name: strip, collapse spaces, title case with PT-BR rules.
+
+    'JOAO DA SILVA' -> 'Joao da Silva'
+    '  maria  ' -> 'Maria'
+    """
+    if not raw or not raw.strip():
+        return None
+    name = re.sub(r"\s+", " ", raw.strip())
+    parts = []
+    for i, p in enumerate(name.split(" ")):
+        low = p.lower()
+        if i > 0 and low in _LOWER_PARTS:
+            parts.append(low)
+        else:
+            parts.append(p.capitalize())
+    return " ".join(parts)
 
 
 def sync_clientes_from_sheets() -> dict:
@@ -39,8 +63,8 @@ def sync_clientes_from_sheets() -> dict:
         cur = conn.cursor()
         for c in clientes:
             try:
-                # Extract known extra fields
-                gestor = c.extras.get("GESTOR") or None
+                # Extract known extra fields (normalize names)
+                gestor = _normalize_name(c.extras.get("GESTOR"))
                 squad = c.extras.get("SQUAD") or None
                 status_auto = c.extras.get("STATUS (AUTO)", "")
                 ultima_geracao = c.extras.get("ULTIMA VEZ GERADO (AUTO)", "")
