@@ -65,25 +65,29 @@ def get_standalone_conn():
 
 def init_pg_db(app):
     """Run pg_schema.sql to create tables and seed admin user."""
-    dsn = _pg_dsn()
-    conn = psycopg2.connect(**dsn)
-    conn.set_session(autocommit=True)
     try:
-        cur = conn.cursor()
-        with open(_SCHEMA_PATH, "r", encoding="utf-8") as f:
-            cur.execute(f.read())
+        dsn = _pg_dsn()
+        conn = psycopg2.connect(**dsn)
+        conn.set_session(autocommit=True)
+        try:
+            cur = conn.cursor()
+            with open(_SCHEMA_PATH, "r", encoding="utf-8") as f:
+                cur.execute(f.read())
 
-        schema = _pg_schema()
-        cur.execute(f"SET search_path TO {schema}, public")
+            schema = _pg_schema()
+            cur.execute(f"SET search_path TO {schema}, public")
 
-        # Seed admin user if not exists
-        cur.execute("SELECT id FROM users WHERE username = %s", ("admin",))
-        if not cur.fetchone():
-            password = os.getenv("ADMIN_PASSWORD", "admin")
-            cur.execute(
-                "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
-                ("admin", generate_password_hash(password)),
-            )
-        cur.close()
-    finally:
-        conn.close()
+            # Seed admin user if not exists
+            cur.execute("SELECT id FROM users WHERE username = %s", ("admin",))
+            if not cur.fetchone():
+                password = os.getenv("ADMIN_PASSWORD", "admin")
+                cur.execute(
+                    "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
+                    ("admin", generate_password_hash(password)),
+                )
+            cur.close()
+        finally:
+            conn.close()
+    except Exception as exc:
+        print(f"[WARN] PostgreSQL init failed: {exc}")
+        print("[WARN] App will start but DB features may be unavailable until PG is reachable.")

@@ -82,7 +82,7 @@ def status_stream():
 @api_bp.route("/clients")
 @login_required
 def list_clients():
-    """Return all clients from PostgreSQL cache."""
+    """Return all clients from PostgreSQL cache; fall back to Sheets if empty."""
     try:
         conn = get_pg_conn()
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -95,12 +95,15 @@ def list_clients():
         rows = cur.fetchall()
         cur.close()
 
+        # If PG table is empty, fall back to Sheets and trigger background sync
+        if not rows:
+            return _clients_from_sheets_fallback()
+
         # Map field names for backward compatibility with existing JS
         result = []
         for r in rows:
             d = dict(r)
             d["status"] = d.pop("status_auto", "")
-            # Merge extras into the response (like GESTOR, SQUAD already as top-level)
             extras = d.get("extras") or {}
             if isinstance(extras, str):
                 extras = json.loads(extras)
@@ -112,7 +115,57 @@ def list_clients():
         import traceback
         tb = traceback.format_exc()
         print(f"[API /clients ERROR] {tb}")
-        return jsonify({"error": str(exc), "traceback": tb}), 500
+        # If PG fails entirely, fall back to Sheets
+        try:
+            return _clients_from_sheets_fallback()
+        except Exception:
+            return jsonify({"error": str(exc), "traceback": tb}), 500
+
+
+def _clients_from_sheets_fallback():
+    """Fetch clients directly from Google Sheets (original behavior) and trigger sync."""
+    from core.leitura_central import fetch_clientes
+    from config import settings
+
+    clientes = fetch_clientes(
+        atualizar=False,
+        sheet_url=settings.CENTRAL_SHEET_URL,
+        tab_name=settings.CENTRAL_TAB_NAME,
+    )
+
+    result = []
+    for c in clientes:
+        d = {
+            "nome": c.nome,
+            "categoria": c.categoria,
+            "painel_url": c.painel_url,
+            "pasta_url": c.pasta_url,
+            "id_google_ads": c.id_google_ads,
+            "id_meta_ads": c.id_meta_ads,
+            "id_ga4": c.id_ga4,
+            "gestor": c.extras.get("GESTOR", ""),
+            "status": c.extras.get("STATUS (AUTO)", ""),
+            "ultima_geracao": c.extras.get("ULTIMA VEZ GERADO (AUTO)", ""),
+            "extras": {k: v for k, v in c.extras.items() if not k.startswith("_")},
+        }
+        result.append(d)
+
+    # Trigger background sync so next request comes from PG
+    _trigger_background_sync()
+
+    return jsonify(result)
+
+
+def _trigger_background_sync():
+    """Run sync in a background thread (fire-and-forget)."""
+    def do_sync():
+        try:
+            from web.sync import sync_clientes_from_sheets
+            sync_clientes_from_sheets()
+        except Exception:
+            pass
+    t = threading.Thread(target=do_sync, daemon=True)
+    t.start()
 
 
 # ---------------------------------------------------------------------------
@@ -322,17 +375,42 @@ def get_logs():
 @api_bp.route("/gestores")
 @login_required
 def list_gestores():
-    """Return distinct gestor names from PG."""
-    conn = get_pg_conn()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT DISTINCT gestor FROM clientes
-        WHERE gestor IS NOT NULL AND gestor != ''
-        ORDER BY gestor
-    """)
-    gestores = [row[0] for row in cur.fetchall()]
-    cur.close()
-    return jsonify(gestores)
+    """Return distinct gestor names from PG; fall back to Sheets if empty."""
+    try:
+        conn = get_pg_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT DISTINCT gestor FROM clientes
+            WHERE gestor IS NOT NULL AND gestor != ''
+            ORDER BY gestor
+        """)
+        gestores = [row[0] for row in cur.fetchall()]
+        cur.close()
+
+        if gestores:
+            return jsonify(gestores)
+    except Exception:
+        pass
+
+    # Fall back: fetch from Sheets and extract distinct gestores
+    try:
+        from core.leitura_central import fetch_clientes
+        from config import settings
+
+        clientes = fetch_clientes(
+            atualizar=False,
+            sheet_url=settings.CENTRAL_SHEET_URL,
+            tab_name=settings.CENTRAL_TAB_NAME,
+        )
+        gestor_set = sorted({
+            c.extras.get("GESTOR", "")
+            for c in clientes
+            if c.extras.get("GESTOR")
+        })
+        _trigger_background_sync()
+        return jsonify(gestor_set)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 @api_bp.route("/gestor/<path:nome>/dashboard")
