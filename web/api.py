@@ -592,6 +592,31 @@ def unassign_gestor():
     return jsonify({"removed": rows[0][0]})
 
 
+@api_bp.route("/client/<path:nome>", methods=["DELETE"])
+@login_required
+def delete_client(nome: str):
+    """Delete a client and all its metrics from the database."""
+    conn = get_pg_conn()
+    cur = conn.cursor()
+
+    # Delete metrics first (FK-safe)
+    cur.execute("DELETE FROM metricas WHERE LOWER(cliente_nome) = LOWER(%s)", (nome,))
+    metrics_deleted = cur.rowcount
+
+    cur.execute("DELETE FROM clientes WHERE LOWER(nome) = LOWER(%s) RETURNING nome", (nome,))
+    rows = cur.fetchall()
+    conn.commit()
+    cur.close()
+
+    if not rows:
+        return jsonify({"error": "Cliente nao encontrado"}), 404
+
+    return jsonify({
+        "deleted": rows[0][0],
+        "metrics_removed": metrics_deleted,
+    })
+
+
 @api_bp.route("/clientes/search")
 @login_required
 def search_clientes():

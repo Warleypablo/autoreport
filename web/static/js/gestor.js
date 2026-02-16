@@ -111,11 +111,18 @@ async function loadGestorDashboard() {
                     <td class="px-4 py-3 text-sm text-right text-surface-500 dark:text-surface-400">${c.cpa != null ? formatBRL(c.cpa) : '-'}</td>
                     <td class="px-4 py-3 text-xs text-surface-400">${formatPeriodo(c.periodo_inicio, c.periodo_fim)}</td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="removeClientFromGestor('${escapeHtml(c.cliente_nome)}')"
-                                class="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
-                                title="Remover cliente do gestor">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                        </button>
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="removeClientFromGestor('${escapeHtml(c.cliente_nome)}')"
+                                    class="p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-300 hover:text-surface-500 transition"
+                                    title="Desvincular do gestor">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                            <button onclick="deleteClient('${escapeHtml(c.cliente_nome)}')"
+                                    class="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
+                                    title="Excluir cliente da base">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        </div>
                     </td>
                 </tr>`;
             }).join('');
@@ -131,9 +138,14 @@ async function loadGestorDashboard() {
                     <a href="/client/${encodeURIComponent(c.cliente_nome)}"
                        class="hover:text-primary-500 transition">${escapeHtml(c.cliente_nome)}</a>
                     <button onclick="removeClientFromGestor('${escapeHtml(c.cliente_nome)}')"
-                            class="ml-1 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
-                            title="Remover">
+                            class="ml-1 p-0.5 rounded hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-300 hover:text-surface-500 transition"
+                            title="Desvincular">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                    <button onclick="deleteClient('${escapeHtml(c.cliente_nome)}')"
+                            class="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
+                            title="Excluir da base">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                     </button>
                 </span>
             `).join('');
@@ -372,6 +384,23 @@ async function removeClientFromGestor(clientName) {
         if (!resp.ok) throw new Error(data.error || 'Erro ao remover');
 
         showToast(`${clientName} removido do gestor`, 'success');
+        loadGestorDashboard();
+    } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
+    }
+}
+
+async function deleteClient(clientName) {
+    if (!confirm(`EXCLUIR "${clientName}" da base?\n\nIsso remove o cliente e todas as metricas dele. Essa acao nao pode ser desfeita.`)) return;
+
+    try {
+        const resp = await fetch(`/api/client/${encodeURIComponent(clientName)}`, {
+            method: 'DELETE',
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Erro ao excluir');
+
+        showToast(`${data.deleted} excluido (${data.metrics_removed} metricas removidas)`, 'success');
         loadGestorDashboard();
     } catch (err) {
         showToast('Erro: ' + err.message, 'error');
