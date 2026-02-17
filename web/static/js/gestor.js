@@ -3,14 +3,44 @@
 let gestorEvtSource = null;
 
 // ─────────────────────────────────────────────
+// Role detection from data attributes
+// ─────────────────────────────────────────────
+function _getRole() {
+    const el = document.getElementById('gestor-app');
+    return el ? el.dataset.role : 'admin';
+}
+function _getGestorName() {
+    const el = document.getElementById('gestor-app');
+    return el ? el.dataset.gestorName : '';
+}
+function _isGestor() { return _getRole() === 'gestor'; }
+
+// ─────────────────────────────────────────────
 // Load gestores dropdown
 // ─────────────────────────────────────────────
 async function loadGestores() {
     try {
-        const resp = await fetch('/api/gestores');
-        const gestores = await resp.json();
         const select = document.getElementById('gestor-select');
         if (!select) return;
+
+        // Gestor role: hide dropdown, set fixed value
+        if (_isGestor()) {
+            const gestorName = _getGestorName();
+            select.innerHTML = `<option value="${gestorName}" selected>${gestorName}</option>`;
+            select.disabled = true;
+            select.closest('.flex.items-center.gap-2')?.classList.add('hidden');
+
+            // Hide admin-only buttons
+            const btnManage = document.getElementById('btn-manage-clients');
+            if (btnManage) btnManage.remove();
+
+            initGestorSSE();
+            loadGestorDashboard();
+            return;
+        }
+
+        const resp = await fetch('/api/gestores');
+        const gestores = await resp.json();
 
         select.innerHTML = '<option value="">Selecione um gestor...</option>';
         gestores.forEach(g => {
@@ -93,9 +123,29 @@ async function loadGestorDashboard() {
             if (countBadge) countBadge.textContent = `${data.clients.length} clientes com metricas`;
 
             const tbody = document.getElementById('gestor-clients-tbody');
+            const isAdmin = !_isGestor();
+
+            // Hide action column header for gestor
+            const actionTh = document.querySelector('#gestor-clients thead th:last-child');
+            if (actionTh && !isAdmin) actionTh.classList.add('hidden');
+
             tbody.innerHTML = data.clients.map(c => {
                 const isLead = (c.categoria || '').toLowerCase().startsWith('lead');
-                const convLabel = isLead ? 'leads' : 'vendas';
+                const actionCol = isAdmin ? `
+                    <td class="px-4 py-3 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="removeClientFromGestor('${escapeHtml(c.cliente_nome)}')"
+                                    class="p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-300 hover:text-surface-500 transition"
+                                    title="Desvincular do gestor">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                            <button onclick="deleteClient('${escapeHtml(c.cliente_nome)}')"
+                                    class="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
+                                    title="Excluir cliente da base">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                            </button>
+                        </div>
+                    </td>` : '';
                 return `
                 <tr>
                     <td class="px-4 py-3">
@@ -110,20 +160,7 @@ async function loadGestorDashboard() {
                     <td class="px-4 py-3 text-sm text-right text-surface-500 dark:text-surface-400">${c.vendas != null ? c.vendas : '-'}</td>
                     <td class="px-4 py-3 text-sm text-right text-surface-500 dark:text-surface-400">${c.cpa != null ? formatBRL(c.cpa) : '-'}</td>
                     <td class="px-4 py-3 text-xs text-surface-400">${formatPeriodo(c.periodo_inicio, c.periodo_fim)}</td>
-                    <td class="px-4 py-3 text-center">
-                        <div class="flex items-center justify-center gap-1">
-                            <button onclick="removeClientFromGestor('${escapeHtml(c.cliente_nome)}')"
-                                    class="p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-800 text-surface-300 hover:text-surface-500 transition"
-                                    title="Desvincular do gestor">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                            </button>
-                            <button onclick="deleteClient('${escapeHtml(c.cliente_nome)}')"
-                                    class="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
-                                    title="Excluir cliente da base">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                            </button>
-                        </div>
-                    </td>
+                    ${actionCol}
                 </tr>`;
             }).join('');
         }
@@ -132,11 +169,8 @@ async function loadGestorDashboard() {
         if (noMetrics && data.clients_no_metrics && data.clients_no_metrics.length > 0) {
             noMetrics.classList.remove('hidden');
             const list = document.getElementById('gestor-no-metrics-list');
-            list.innerHTML = data.clients_no_metrics.map(c => `
-                <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium
-                       bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400">
-                    <a href="/client/${encodeURIComponent(c.cliente_nome)}"
-                       class="hover:text-primary-500 transition">${escapeHtml(c.cliente_nome)}</a>
+            list.innerHTML = data.clients_no_metrics.map(c => {
+                const adminBtns = isAdmin ? `
                     <button onclick="removeClientFromGestor('${escapeHtml(c.cliente_nome)}')"
                             class="ml-1 p-0.5 rounded hover:bg-surface-200 dark:hover:bg-surface-700 text-surface-300 hover:text-surface-500 transition"
                             title="Desvincular">
@@ -146,9 +180,15 @@ async function loadGestorDashboard() {
                             class="p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-950/30 text-surface-300 hover:text-red-500 transition"
                             title="Excluir da base">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    </button>
-                </span>
-            `).join('');
+                    </button>` : '';
+                return `
+                <span class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium
+                       bg-surface-100 dark:bg-surface-800 text-surface-500 dark:text-surface-400">
+                    <a href="/client/${encodeURIComponent(c.cliente_nome)}"
+                       class="hover:text-primary-500 transition">${escapeHtml(c.cliente_nome)}</a>
+                    ${adminBtns}
+                </span>`;
+            }).join('');
         }
 
     } catch (err) {

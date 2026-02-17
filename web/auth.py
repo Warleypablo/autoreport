@@ -43,6 +43,11 @@ def login():
             session.clear()
             session["user_id"] = user["id"]
             session["username"] = user["username"]
+            session["role"] = user.get("role") or "admin"
+            session["gestor_name"] = user.get("gestor_name")
+
+            if session["role"] == "gestor":
+                return redirect(url_for("main.gestor_dashboard"))
             return redirect(url_for("main.dashboard"))
         flash("Usuario ou senha incorretos.", "error")
     return render_template("login.html")

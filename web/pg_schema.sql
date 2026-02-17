@@ -10,8 +10,13 @@ CREATE TABLE IF NOT EXISTS autoreport.users (
     id              SERIAL PRIMARY KEY,
     username        TEXT UNIQUE NOT NULL,
     password_hash   TEXT NOT NULL,
+    role            TEXT DEFAULT 'admin',
+    gestor_name     TEXT,
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+-- Migration: add role/gestor_name columns if they don't exist (for existing DBs)
+ALTER TABLE autoreport.users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'admin';
+ALTER TABLE autoreport.users ADD COLUMN IF NOT EXISTS gestor_name TEXT;
 
 -- ============================================================
 -- jobs (migrated from SQLite)

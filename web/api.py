@@ -526,7 +526,9 @@ def list_gestores():
 @api_bp.route("/gestor/assign", methods=["POST"])
 @login_required
 def assign_gestor():
-    """Assign a gestor to a list of clients (by exact or partial name match)."""
+    """Assign a gestor to a list of clients (by exact or partial name match). Admin only."""
+    if session.get("role") == "gestor":
+        return jsonify({"error": "Acesso negado"}), 403
     body = request.get_json(force=True)
     gestor = body.get("gestor", "").strip()
     client_names = body.get("clients", [])
@@ -568,7 +570,9 @@ def assign_gestor():
 @api_bp.route("/gestor/unassign", methods=["POST"])
 @login_required
 def unassign_gestor():
-    """Remove gestor assignment from a client."""
+    """Remove gestor assignment from a client. Admin only."""
+    if session.get("role") == "gestor":
+        return jsonify({"error": "Acesso negado"}), 403
     body = request.get_json(force=True)
     client_name = body.get("client", "").strip()
 
@@ -595,7 +599,9 @@ def unassign_gestor():
 @api_bp.route("/client/<path:nome>", methods=["DELETE"])
 @login_required
 def delete_client(nome: str):
-    """Delete a client and all its metrics from the database."""
+    """Delete a client and all its metrics from the database. Admin only."""
+    if session.get("role") == "gestor":
+        return jsonify({"error": "Acesso negado"}), 403
     conn = get_pg_conn()
     cur = conn.cursor()
 
@@ -646,10 +652,102 @@ def search_clientes():
     return jsonify(rows)
 
 
+# ---------------------------------------------------------------------------
+# User management (admin only)
+# ---------------------------------------------------------------------------
+@api_bp.route("/users", methods=["GET"])
+@login_required
+def list_users():
+    """List all users. Admin only."""
+    if session.get("role") == "gestor":
+        return jsonify({"error": "Acesso negado"}), 403
+
+    conn = get_pg_conn()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(
+        "SELECT id, username, role, gestor_name, created_at "
+        "FROM autoreport.users ORDER BY username"
+    )
+    rows = [dict(r) for r in cur.fetchall()]
+    cur.close()
+    return Response(
+        json.dumps(rows, default=_json_default, ensure_ascii=False),
+        mimetype="application/json",
+    )
+
+
+@api_bp.route("/users", methods=["POST"])
+@login_required
+def create_user():
+    """Create a new user (gestor). Admin only."""
+    if session.get("role") == "gestor":
+        return jsonify({"error": "Acesso negado"}), 403
+
+    from werkzeug.security import generate_password_hash
+
+    body = request.get_json(force=True)
+    username = body.get("username", "").strip()
+    password = body.get("password", "").strip()
+    gestor_name = body.get("gestor_name", "").strip()
+    role = body.get("role", "gestor").strip()
+
+    if not username or not password:
+        return jsonify({"error": "username e password sao obrigatorios"}), 400
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "INSERT INTO autoreport.users (username, password_hash, role, gestor_name) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (username, generate_password_hash(password), role, gestor_name or None),
+        )
+        user_id = cur.fetchone()[0]
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        if "duplicate key" in str(exc).lower() or "unique" in str(exc).lower():
+            return jsonify({"error": f"Usuario '{username}' ja existe"}), 409
+        raise
+    finally:
+        cur.close()
+
+    return jsonify({"id": user_id, "username": username, "role": role, "gestor_name": gestor_name}), 201
+
+
+@api_bp.route("/users/<int:user_id>", methods=["DELETE"])
+@login_required
+def delete_user(user_id: int):
+    """Delete a user. Admin only. Cannot delete yourself."""
+    if session.get("role") == "gestor":
+        return jsonify({"error": "Acesso negado"}), 403
+
+    if user_id == session.get("user_id"):
+        return jsonify({"error": "Nao pode excluir seu proprio usuario"}), 400
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM autoreport.users WHERE id = %s RETURNING username", (user_id,)
+    )
+    rows = cur.fetchall()
+    conn.commit()
+    cur.close()
+
+    if not rows:
+        return jsonify({"error": "Usuario nao encontrado"}), 404
+
+    return jsonify({"deleted": rows[0][0]})
+
+
 @api_bp.route("/gestor/<path:nome>/dashboard")
 @login_required
 def gestor_dashboard(nome: str):
     """Return aggregated metrics and per-client breakdown for a gestor."""
+    # Gestor can only see their own dashboard
+    if session.get("role") == "gestor":
+        nome = session.get("gestor_name", nome)
+
     conn = get_pg_conn()
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 

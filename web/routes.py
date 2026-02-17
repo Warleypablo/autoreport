@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """web/routes.py - Main page routes blueprint."""
 
-from flask import Blueprint, redirect, render_template, url_for
+from flask import Blueprint, redirect, render_template, session, url_for
 
 from web.auth import login_required
 
@@ -11,12 +11,16 @@ main_bp = Blueprint("main", __name__)
 @main_bp.route("/")
 @login_required
 def index():
+    if session.get("role") == "gestor":
+        return redirect(url_for("main.gestor_dashboard"))
     return redirect(url_for("main.dashboard"))
 
 
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():
+    if session.get("role") == "gestor":
+        return redirect(url_for("main.gestor_dashboard"))
     return render_template("dashboard.html")
 
 
@@ -35,10 +39,14 @@ def gestor_dashboard():
 @main_bp.route("/history")
 @login_required
 def history():
+    if session.get("role") == "gestor":
+        return redirect(url_for("main.gestor_dashboard"))
     return render_template("history.html")
 
 
 @main_bp.route("/logs")
 @login_required
 def logs():
+    if session.get("role") == "gestor":
+        return redirect(url_for("main.gestor_dashboard"))
     return render_template("logs.html")

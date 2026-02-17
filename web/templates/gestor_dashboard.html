@@ -2,6 +2,8 @@
 {% block title %}Gestores - Auto Report{% endblock %}
 
 {% block content %}
+<div id="gestor-app" data-role="{{ session.get('role', 'admin') }}" data-gestor-name="{{ session.get('gestor_name', '') }}">
+</div>
 <!-- Gestor selector bar -->
 <div class="card p-4 mb-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
