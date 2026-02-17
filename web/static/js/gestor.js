@@ -114,6 +114,8 @@ async function loadGestorDashboard() {
             document.getElementById('sum-inv-meta').textContent = formatBRL(data.summary.total_inv_meta);
         }
 
+        const isAdmin = !_isGestor();
+
         // Client metrics table
         if (clients && data.clients.length > 0) {
             clients.classList.remove('hidden');
@@ -123,7 +125,6 @@ async function loadGestorDashboard() {
             if (countBadge) countBadge.textContent = `${data.clients.length} clientes com metricas`;
 
             const tbody = document.getElementById('gestor-clients-tbody');
-            const isAdmin = !_isGestor();
 
             // Hide action column header for gestor
             const actionTh = document.querySelector('#gestor-clients thead th:last-child');
