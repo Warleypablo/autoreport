@@ -122,6 +122,105 @@ def list_clients():
             return jsonify({"error": str(exc), "traceback": tb}), 500
 
 
+@api_bp.route("/clients", methods=["POST"])
+@login_required
+def create_client():
+    """Create a new client directly in PostgreSQL."""
+    body = request.get_json(force=True)
+
+    nome = (body.get("nome") or "").strip()
+    if not nome:
+        return jsonify({"error": "Nome e obrigatorio"}), 400
+
+    categoria = (body.get("categoria") or "").strip() or None
+    gestor = (body.get("gestor") or "").strip() or None
+    painel_url = (body.get("painel_url") or "").strip() or None
+    pasta_url = (body.get("pasta_url") or "").strip() or None
+    id_google_ads = (body.get("id_google_ads") or "").strip() or None
+    id_meta_ads = (body.get("id_meta_ads") or "").strip() or None
+    id_ga4 = (body.get("id_ga4") or "").strip() or None
+
+    # Gestor can only create clients assigned to themselves
+    if session.get("role") == "gestor":
+        gestor = session.get("gestor_name")
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO clientes
+                   (nome, categoria, gestor, painel_url, pasta_url,
+                    id_google_ads, id_meta_ads, id_ga4, created_at, updated_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s, NOW(), NOW())
+               RETURNING id, nome""",
+            (nome, categoria, gestor, painel_url, pasta_url,
+             id_google_ads, id_meta_ads, id_ga4),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return jsonify({"id": row[0], "nome": row[1]}), 201
+    except Exception as exc:
+        conn.rollback()
+        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower():
+            return jsonify({"error": f"Cliente '{nome}' ja existe"}), 409
+        raise
+    finally:
+        cur.close()
+
+
+@api_bp.route("/client/<path:nome>/pg", methods=["PUT"])
+@login_required
+def update_client_pg(nome: str):
+    """Update client fields directly in PostgreSQL."""
+    body = request.get_json(force=True)
+    if not body:
+        return jsonify({"error": "Corpo vazio"}), 400
+
+    # Gestor can only update their own clients
+    if session.get("role") == "gestor":
+        conn = get_pg_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT gestor FROM clientes WHERE LOWER(nome) = LOWER(%s)", (nome,)
+        )
+        row = cur.fetchone()
+        cur.close()
+        if not row:
+            return jsonify({"error": "Cliente nao encontrado"}), 404
+        if (row[0] or "").lower() != (session.get("gestor_name") or "").lower():
+            return jsonify({"error": "Acesso negado"}), 403
+
+    allowed = {"categoria", "painel_url", "pasta_url",
+               "id_google_ads", "id_meta_ads", "id_ga4"}
+    updates = {}
+    for key in allowed:
+        if key in body:
+            updates[key] = (body[key] or "").strip() or None
+
+    if not updates:
+        return jsonify({"error": "Nenhum campo valido para atualizar"}), 400
+
+    set_clauses = ", ".join(f"{k} = %s" for k in updates)
+    values = list(updates.values())
+    values.append(nome)
+
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"UPDATE clientes SET {set_clauses}, updated_at = NOW() "
+        f"WHERE LOWER(nome) = LOWER(%s) RETURNING nome",
+        values,
+    )
+    rows = cur.fetchall()
+    conn.commit()
+    cur.close()
+
+    if not rows:
+        return jsonify({"error": "Cliente nao encontrado"}), 404
+
+    return jsonify({"updated": rows[0][0], "fields": list(updates.keys())})
+
+
 def _clients_from_sheets_fallback():
     """Fetch clients directly from Google Sheets (original behavior) and trigger sync."""
     from core.leitura_central import fetch_clientes

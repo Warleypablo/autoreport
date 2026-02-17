@@ -36,6 +36,12 @@ def gestor_dashboard():
     return render_template("gestor_dashboard.html")
 
 
+@main_bp.route("/gestor/clientes")
+@login_required
+def gestor_clientes():
+    return render_template("gestor_clientes.html")
+
+
 @main_bp.route("/history")
 @login_required
 def history():

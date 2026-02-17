@@ -358,3 +358,18 @@
 .dark #gestor-clients-tbody tr:hover {
     background-color: rgba(99, 102, 241, 0.06);
 }
+
+/* ─── Clientes page table rows ─── */
+.clientes-row {
+    transition: background-color 0.15s;
+    border-bottom: 1px solid #f1f5f9;
+}
+.dark .clientes-row {
+    border-bottom-color: rgba(51, 65, 85, 0.3);
+}
+.clientes-row:hover {
+    background-color: rgba(99, 102, 241, 0.04);
+}
+.dark .clientes-row:hover {
+    background-color: rgba(99, 102, 241, 0.06);
+}
