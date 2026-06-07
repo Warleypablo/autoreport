@@ -7,7 +7,7 @@ config/settings_cloud.py – Configuração baseada em variáveis de ambiente (p
 
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 
 # Carrega variáveis do .env localizado na raiz do projeto (se existir)
@@ -106,11 +106,11 @@ USE_SERVICE_ACCOUNT: bool = _env("USE_SERVICE_ACCOUNT", "False", cast=lambda v: 
 # ─────────────────────────────────────────────
 # 3d. Credenciais Meta ADS Token
 # ─────────────────────────────────────────────
-ACCESS_TOKEN_META_SYSTEM= '***REMOVED***'
-ACCESS_TOKEN_META_HUMAN= '***REMOVED***'
-ID_SYSTEM_USER= '100077935834708'
-BUSINESS_ID_META= '497455154418877'
-APP_ID_META= '733366652352713'
+ACCESS_TOKEN_META_SYSTEM: str = _env("ACCESS_TOKEN_META_SYSTEM", "")
+ACCESS_TOKEN_META_HUMAN: str  = _env("ACCESS_TOKEN_META_HUMAN", "")
+ID_SYSTEM_USER: str           = _env("ID_SYSTEM_USER", "")
+BUSINESS_ID_META: str         = _env("BUSINESS_ID_META", "")
+APP_ID_META: str              = _env("APP_ID_META", "")
 
 # ─────────────────────────────────────────────
 # 4. Escopos das demais APIs Google
@@ -136,7 +136,7 @@ TZ: str = _env("TZ", "America/Sao_Paulo")
 # ─────────────────────────────────────────────
 MAX_RETRIES: int = _env("MAX_RETRIES", 5, cast=int)
 BACKOFF_SECONDS: int = _env("BACKOFF_SECONDS", 2, cast=int)
-CLIENT_LIMIT: int | None = _env("CLIENT_LIMIT", None, cast=lambda v: int(v) if v is not None else None)
+CLIENT_LIMIT: Optional[int] = _env("CLIENT_LIMIT", None, cast=lambda v: int(v) if v is not None else None)
 
 TESTE: bool = _env("TESTE", "False", cast=lambda v: v.lower() in ["1", "true", "yes"])
 
